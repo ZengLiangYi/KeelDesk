@@ -2,7 +2,7 @@
 name = "keeldesk"
 version = "0.1.0"
 description = "KeelDesk desktop shell"
-authors = ["you"]
+authors = ["ZengLiangYi"]
 edition = "2021"
 default-run = "keeldesk"
 autobins = false
