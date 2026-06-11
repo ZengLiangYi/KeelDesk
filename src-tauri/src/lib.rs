@@ -11,8 +11,28 @@ fn greet(name: String) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+#[tauri::command]
+#[specta::specta]
+fn is_primary_mouse_button_down() -> bool {
+    platform_is_primary_mouse_button_down()
+}
+
+#[cfg(target_os = "windows")]
+fn platform_is_primary_mouse_button_down() -> bool {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
+
+    const KEY_PRESSED_MASK: i16 = 0x8000u16 as i16;
+
+    unsafe { GetAsyncKeyState(VK_LBUTTON.0 as i32) & KEY_PRESSED_MASK != 0 }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn platform_is_primary_mouse_button_down() -> bool {
+    false
+}
+
 fn specta_builder() -> Builder<tauri::Wry> {
-    Builder::<tauri::Wry>::new().commands(collect_commands![greet])
+    Builder::<tauri::Wry>::new().commands(collect_commands![greet, is_primary_mouse_button_down])
 }
 
 pub fn export_typescript_bindings() {

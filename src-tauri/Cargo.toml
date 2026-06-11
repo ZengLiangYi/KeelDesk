@@ -37,4 +37,4 @@ specta-typescript = "0.0.12"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["typescript"] }
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = ["Win32_Graphics_Dwm"] }
+windows = { version = "0.61", features = ["Win32_Graphics_Dwm", "Win32_UI_Input_KeyboardAndMouse"] }

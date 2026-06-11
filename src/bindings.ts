@@ -5,5 +5,6 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 /** Commands */
 export const commands = {
 	greet: (name: string) => __TAURI_INVOKE<string>("greet", { name }),
+	isPrimaryMouseButtonDown: () => __TAURI_INVOKE<boolean>("is_primary_mouse_button_down"),
 };
 

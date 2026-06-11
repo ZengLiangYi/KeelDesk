@@ -67,11 +67,25 @@ import { commands } from "./bindings";
   - `decorations: false`
   - `transparent: true`
 - The visual titlebar may be hidden, but a drag region must remain.
-- Use `data-tauri-drag-region` for draggable areas.
-- Put `data-tauri-drag-region="false"` on interactive controls inside draggable areas.
+- For simple static draggable areas, `data-tauri-drag-region` is acceptable.
+- For the KeelDesk top drag handle, prefer the explicit `startDragging()` pattern below instead of `data-tauri-drag-region`.
+- Put `data-tauri-drag-region="false"` on interactive controls only when they are inside a draggable region.
 - Window controls should call Tauri window APIs from `@tauri-apps/api/window`.
 - On Windows, the purple border is applied through DWM from Rust. Keep that logic in Tauri/Rust rather than trying to fake the outer OS border with CSS.
 - Do not try to change the native Windows corner radius unless explicitly asked. It is mostly OS-managed.
+
+## Drag Handle Pattern
+
+- The transparent titlebar should not consume clicks across its full width. Use `pointer-events: none` on the titlebar shell, then restore `pointer-events: auto` only on the drag handle hit area and window controls.
+- Keep the drag handle visually hidden by default. Reveal it with CSS `:hover`, `:active`, and an `.is-active` class while dragging.
+- Start native dragging immediately on left `pointerdown` with `getCurrentWindow().startDragging()`. Do not wait for `requestAnimationFrame` or animation paint before starting the drag; that makes the window feel sticky.
+- Do not rely on WebView `mouseup`, `pointerup`, `pointercancel`, or `setPointerCapture` to detect the end of a native window drag. During `startDragging()`, the OS can take over and the WebView may not receive those events reliably.
+- While dragging, keep the handle visible by polling the generated `commands.isPrimaryMouseButtonDown()` binding at a short interval, currently about `80ms`.
+- Hide the handle only after the system reports that the primary mouse button is no longer pressed, with a short fade delay, currently about `180ms`.
+- On Windows, implement the mouse-button check in Rust with `GetAsyncKeyState(VK_LBUTTON)`. Keep the Windows dependency feature `Win32_UI_Input_KeyboardAndMouse` enabled in `src-tauri/Cargo.toml`.
+- Register the mouse-button command with `tauri-specta`, regenerate `src/bindings.ts`, and call the generated binding from React. Do not hand-write `invoke("is_primary_mouse_button_down")`.
+- Clean up drag hide and poll timers in React unmount cleanup.
+- This pattern exists because native window dragging crosses out of the normal DOM event lifecycle. CSS hover is fine for the idle hint, but drag state must be based on OS mouse-button state.
 
 ## UI Direction
 

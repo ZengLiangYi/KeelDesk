@@ -63,7 +63,44 @@ body,
   height: 46px;
   background: transparent;
   border-bottom: 0;
+  pointer-events: none;
   user-select: none;
+}
+
+.drag-handle-zone {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 168px;
+  height: 18px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  border-radius: 0 0 999px 999px;
+  cursor: grab;
+  pointer-events: auto;
+  padding-top: 3px;
+  transform: translateX(-50%);
+}
+
+.drag-handle-zone:active {
+  cursor: grabbing;
+}
+
+.drag-handle {
+  width: 76px;
+  height: 4px;
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  background: var(--fluent-purple);
+  transition: opacity 140ms ease;
+}
+
+.drag-handle-zone:hover .drag-handle,
+.drag-handle-zone:active .drag-handle,
+.drag-handle-zone.is-active .drag-handle {
+  opacity: 1;
 }
 
 .traffic-light-controls {
@@ -84,6 +121,7 @@ body,
     var(--fluent-shadow-16),
     inset 0 1px 0 rgba(255, 255, 255, 0.10);
   backdrop-filter: blur(20px) saturate(150%);
+  pointer-events: auto;
 }
 
 .container {
