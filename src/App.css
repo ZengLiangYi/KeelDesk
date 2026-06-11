@@ -103,25 +103,38 @@ body,
   opacity: 1;
 }
 
-.traffic-light-controls {
+.close-control-zone {
   position: absolute;
-  top: 10px;
-  left: 14px;
-  height: 28px;
+  top: 0;
+  right: 0;
+  width: 48px;
+  height: 42px;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px;
-  border-radius: 999px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.05)),
-    var(--fluent-acrylic-surface);
-  border: 1px solid var(--fluent-stroke-subtle);
-  box-shadow:
-    var(--fluent-shadow-16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.10);
-  backdrop-filter: blur(20px) saturate(150%);
+  justify-content: center;
   pointer-events: auto;
+}
+
+.close-control {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.92);
+  background: transparent;
+  border: 0;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.close-control-zone:hover .close-control,
+.close-control:focus-visible {
+  opacity: 1;
+}
+
+.close-control:active {
+  opacity: 0.72;
 }
 
 .container {
@@ -132,116 +145,6 @@ body,
   align-items: flex-start;
   justify-content: center;
   text-align: left;
-}
-
-.titlebar .window-control {
-  position: relative;
-  width: 14px;
-  height: 14px;
-  padding: 0;
-  display: grid;
-  place-items: center;
-  color: transparent;
-  border: 0;
-  border-radius: 999px;
-  box-shadow:
-    0 0 12px var(--control-glow),
-    inset 0 0 0 1px var(--fluent-stroke-control);
-  transition:
-    background-color 120ms ease,
-    box-shadow 120ms ease,
-    filter 120ms ease;
-}
-
-.titlebar .window-control.close {
-  --control-glyph: rgba(70, 12, 22, 0.78);
-  --control-glow: rgba(255, 100, 120, 0.32);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.32), transparent),
-    #f87171;
-}
-
-.titlebar .window-control.minimize {
-  --control-glyph: rgba(80, 52, 6, 0.78);
-  --control-glow: rgba(251, 191, 36, 0.30);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.30), transparent),
-    #fbbf24;
-}
-
-.titlebar .window-control.maximize {
-  --control-glyph: rgba(33, 16, 72, 0.78);
-  --control-glow: rgba(139, 92, 246, 0.38);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.32), transparent),
-    var(--fluent-purple);
-}
-
-.titlebar .window-control::before,
-.titlebar .window-control::after {
-  position: absolute;
-  content: "";
-  opacity: 0.5;
-  transition: opacity 120ms ease;
-}
-
-.titlebar .window-control.close::before,
-.titlebar .window-control.close::after {
-  width: 7px;
-  height: 1.5px;
-  border-radius: 999px;
-  background: var(--control-glyph);
-}
-
-.titlebar .window-control.close::before {
-  transform: rotate(45deg);
-}
-
-.titlebar .window-control.close::after {
-  transform: rotate(-45deg);
-}
-
-.titlebar .window-control.minimize::before {
-  width: 7px;
-  height: 1.5px;
-  border-radius: 999px;
-  background: var(--control-glyph);
-}
-
-.titlebar .window-control.maximize::before {
-  width: 6px;
-  height: 6px;
-  border: 1.4px solid var(--control-glyph);
-  border-radius: 2px;
-}
-
-.titlebar .window-control:hover {
-  border-color: transparent;
-  filter: brightness(1.08) saturate(1.08);
-  box-shadow:
-    0 0 18px var(--control-glow),
-    0 0 0 4px var(--fluent-acrylic-surface-hover),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.52);
-}
-
-.traffic-light-controls:hover .window-control::before,
-.traffic-light-controls:hover .window-control::after {
-  opacity: 0.9;
-}
-
-.titlebar .window-control:active {
-  border-color: transparent;
-  filter: brightness(0.92) saturate(1);
-  box-shadow:
-    0 0 8px var(--control-glow),
-    0 0 0 4px var(--fluent-acrylic-surface-pressed),
-    inset 0 1px 3px rgba(0, 0, 0, 0.24);
-}
-
-.titlebar .window-control.close:hover {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.36), transparent),
-    #f87171;
 }
 
 .brand-mark {

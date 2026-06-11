@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { SendIcon } from "lucide-react";
+import { SendIcon, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,16 +21,14 @@ function getTauriWindow() {
   return "__TAURI_INTERNALS__" in window ? getCurrentWindow() : null;
 }
 
-async function runWindowCommand(
-  command: "close" | "minimize" | "toggleMaximize",
-) {
+async function closeWindow() {
   const appWindow = getTauriWindow();
 
   if (!appWindow) {
     return;
   }
 
-  await appWindow[command]();
+  await appWindow.close();
 }
 
 function App() {
@@ -146,28 +144,15 @@ function App() {
           <div className="drag-handle" />
         </div>
 
-        <div className="traffic-light-controls" data-tauri-drag-region="false">
+        <div className="close-control-zone">
           <button
             type="button"
-            className="window-control close"
-            data-window-action="close"
+            className="close-control"
             aria-label="Close"
-            onClick={() => void runWindowCommand("close")}
-          />
-          <button
-            type="button"
-            className="window-control minimize"
-            data-window-action="minimize"
-            aria-label="Minimize"
-            onClick={() => void runWindowCommand("minimize")}
-          />
-          <button
-            type="button"
-            className="window-control maximize"
-            data-window-action="maximize"
-            aria-label="Maximize"
-            onClick={() => void runWindowCommand("toggleMaximize")}
-          />
+            onClick={() => void closeWindow()}
+          >
+            <XIcon aria-hidden="true" size={18} strokeWidth={1.8} />
+          </button>
         </div>
       </header>
 
