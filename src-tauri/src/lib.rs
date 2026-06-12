@@ -2,7 +2,10 @@ use specta_typescript::Typescript;
 use tauri::Manager;
 use tauri_specta::{collect_commands, Builder};
 
+mod tray;
+
 const BINDINGS_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../src/bindings.ts");
+pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -73,11 +76,20 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(specta_builder.invoke_handler())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if tray::should_hide_window_on_close(window.label()) {
+                    api.prevent_close();
+                    tray::hide_main_window(window.app_handle());
+                }
+            }
+        })
         .setup(move |app| {
             specta_builder.mount_events(app);
+            tray::setup_tray(app)?;
 
             #[cfg(target_os = "windows")]
-            if let Some(window) = app.get_webview_window("main") {
+            if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
                 apply_windows_mystic_border(&window)?;
             }
 
