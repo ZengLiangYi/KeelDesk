@@ -1,0 +1,32 @@
+* text=auto
+
+.gitattributes text eol=lf
+.gitignore text eol=lf
+
+# Keep source and configuration files stable across Windows and Unix.
+*.css text eol=lf
+*.html text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.svg text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+Cargo.lock text eol=lf
+
+# Generated TypeScript bindings are committed for editor and build stability.
+src/bindings.ts text eol=lf linguist-generated=true
+
+# Binary assets should never be line-ending normalized.
+*.icns binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.webp binary
+*.woff binary
+*.woff2 binary
