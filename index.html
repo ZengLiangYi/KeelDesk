@@ -1,14 +1,283 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN" class="dark">
   <head>
     <meta charset="UTF-8" />
+    <meta name="color-scheme" content="dark" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KeelDesk</title>
+    <style id="keel-critical-boot">
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body,
+      #root {
+        block-size: 100dvh;
+        margin: 0;
+        overflow: clip;
+        background: #111116;
+        color: #f2f2f6;
+        font-family: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI",
+          system-ui, sans-serif;
+      }
+      .keel-boot-shell {
+        display: flex;
+        flex-direction: column;
+        block-size: 100dvh;
+        inline-size: 100%;
+        overflow: clip;
+        background: #111116;
+      }
+      .keel-boot-header {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 20px;
+        background: rgb(24 24 32 / 0.65);
+        border-block-end: 1px solid rgb(255 255 255 / 0.085);
+      }
+      .keel-boot-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .keel-boot-col {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .keel-boot-grid {
+        flex: 1 1 auto;
+        min-block-size: 0;
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 16px;
+        padding: 16px;
+      }
+      .keel-boot-left {
+        grid-column: span 7 / span 7;
+        min-block-size: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .keel-boot-right {
+        grid-column: span 5 / span 5;
+        min-block-size: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .keel-boot-card {
+        display: flex;
+        flex-direction: column;
+        background: #181820;
+        border-radius: 12px;
+        box-shadow: 0 0 0 1px rgb(242 242 246 / 0.1);
+        overflow: hidden;
+      }
+      .keel-boot-card.is-fill {
+        flex: 1 1 auto;
+        min-block-size: 0;
+      }
+      .keel-boot-card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px;
+        border-block-end: 1px solid rgb(255 255 255 / 0.085);
+      }
+      .keel-boot-card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px;
+      }
+      .keel-boot-footer {
+        flex-shrink: 0;
+        block-size: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-inline: 20px;
+        background: rgb(24 24 32 / 0.55);
+        border-block-start: 1px solid rgb(255 255 255 / 0.085);
+      }
+      .keel-bone {
+        border-radius: 6px;
+        background: #20202b;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .keel-bone {
+          animation: keel-pulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+      }
+      @keyframes keel-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.48;
+        }
+      }
+    </style>
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Zero-JS first-paint skeleton; replaced atomically on React mount -->
+      <div
+        class="keel-boot-shell"
+        role="progressbar"
+        aria-label="正在加载 KeelDesk 工作台"
+        aria-busy="true"
+      >
+        <div class="keel-boot-header">
+          <div class="keel-boot-row">
+            <div
+              class="keel-bone"
+              style="inline-size: 36px; block-size: 36px; border-radius: 8px"
+            ></div>
+            <div class="keel-boot-col">
+              <div
+                class="keel-bone"
+                style="inline-size: 220px; block-size: 16px"
+              ></div>
+              <div
+                class="keel-bone"
+                style="inline-size: 260px; block-size: 14px"
+              ></div>
+            </div>
+          </div>
+          <div class="keel-boot-row">
+            <div
+              class="keel-bone"
+              style="inline-size: 176px; block-size: 32px; border-radius: 8px"
+            ></div>
+            <div
+              class="keel-bone"
+              style="inline-size: 88px; block-size: 28px; border-radius: 8px"
+            ></div>
+          </div>
+        </div>
+
+        <div class="keel-boot-grid">
+          <div class="keel-boot-left">
+            <div class="keel-boot-card">
+              <div class="keel-boot-card-head">
+                <div class="keel-boot-col">
+                  <div
+                    class="keel-bone"
+                    style="inline-size: 120px; block-size: 16px"
+                  ></div>
+                  <div
+                    class="keel-bone"
+                    style="inline-size: 280px; block-size: 13px"
+                  ></div>
+                </div>
+                <div
+                  class="keel-bone"
+                  style="inline-size: 72px; block-size: 24px"
+                ></div>
+              </div>
+              <div class="keel-boot-card-body">
+                <div
+                  class="keel-bone"
+                  style="inline-size: 240px; block-size: 24px"
+                ></div>
+                <div
+                  class="keel-bone"
+                  style="inline-size: 100%; block-size: 96px; border-radius: 8px"
+                ></div>
+              </div>
+            </div>
+
+            <div class="keel-boot-card is-fill">
+              <div class="keel-boot-card-head">
+                <div class="keel-boot-col">
+                  <div
+                    class="keel-bone"
+                    style="inline-size: 148px; block-size: 16px"
+                  ></div>
+                  <div
+                    class="keel-bone"
+                    style="inline-size: 264px; block-size: 13px"
+                  ></div>
+                </div>
+                <div
+                  class="keel-bone"
+                  style="inline-size: 76px; block-size: 20px; border-radius: 999px"
+                ></div>
+              </div>
+              <div class="keel-boot-card-body">
+                <div
+                  class="keel-bone"
+                  style="inline-size: 100%; block-size: 32px"
+                ></div>
+                <div
+                  class="keel-bone"
+                  style="inline-size: 100%; block-size: 36px"
+                ></div>
+                <div
+                  class="keel-bone"
+                  style="inline-size: 88%; block-size: 36px"
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="keel-boot-right">
+            <div class="keel-boot-card is-fill">
+              <div class="keel-boot-card-head">
+                <div class="keel-boot-col">
+                  <div
+                    class="keel-bone"
+                    style="inline-size: 132px; block-size: 16px"
+                  ></div>
+                  <div
+                    class="keel-bone"
+                    style="inline-size: 224px; block-size: 13px"
+                  ></div>
+                </div>
+                <div
+                  class="keel-bone"
+                  style="inline-size: 64px; block-size: 20px; border-radius: 999px"
+                ></div>
+              </div>
+              <div class="keel-boot-card-body">
+                <div
+                  class="keel-bone"
+                  style="inline-size: 100%; block-size: 56px"
+                ></div>
+                <div
+                  class="keel-bone"
+                  style="inline-size: 100%; block-size: 56px"
+                ></div>
+                <div
+                  class="keel-bone"
+                  style="inline-size: 100%; block-size: 56px"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="keel-boot-footer">
+          <div
+            class="keel-bone"
+            style="inline-size: 260px; block-size: 12px"
+          ></div>
+          <div
+            class="keel-bone"
+            style="inline-size: 220px; block-size: 12px"
+          ></div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

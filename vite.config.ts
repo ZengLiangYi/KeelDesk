@@ -13,6 +13,19 @@ export default defineConfig(async () => ({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  optimizeDeps: {
+    include: [
+      "react",
+      "react-dom/client",
+      "lucide-react",
+      "radix-ui",
+      "class-variance-authority",
+      "clsx",
+      "tailwind-merge",
+      "@tauri-apps/api/core",
+      "@tauri-apps/api/event",
+    ],
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
