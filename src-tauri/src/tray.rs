@@ -36,7 +36,7 @@ pub(crate) fn should_hide_window_on_close(window_label: &str) -> bool {
     window_label == MAIN_WINDOW_LABEL
 }
 
-fn show_main_window(app: &tauri::AppHandle) {
+pub(crate) fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
         let _ = window.show();
         let _ = window.unminimize();
@@ -48,6 +48,13 @@ pub(crate) fn hide_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
         let _ = window.hide();
     }
+}
+
+fn quit_application(app: &tauri::AppHandle) {
+    if let Some(runtime) = app.try_state::<crate::keel_core::KeelRuntime>() {
+        runtime.shutdown();
+    }
+    app.exit(0);
 }
 
 pub(crate) fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
@@ -71,7 +78,7 @@ pub(crate) fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
         .on_menu_event(|app, event| match tray_menu_action(event.id().as_ref()) {
             Some(TrayMenuAction::Show) => show_main_window(app),
             Some(TrayMenuAction::Hide) => hide_main_window(app),
-            Some(TrayMenuAction::Quit) => app.exit(0),
+            Some(TrayMenuAction::Quit) => quit_application(app),
             None => {}
         })
         .on_tray_icon_event(|tray, event| {
