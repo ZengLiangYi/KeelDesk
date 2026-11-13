@@ -1,13 +1,20 @@
 # AGENTS.md
 
-Guidance for agents working in this repository.
+Guidance for contributors and coding agents working in this repository.
+
+## Platform & Architecture Boundary
+
+- **KeelDesk targets Windows 11 exclusively** (Build 22000+). Prefer authentic Windows 11 native integrations (`Win32` DWM, Registry, Job Objects, Windows ODR `odr.exe`) over lowest-common-denominator abstractions unless explicitly requested.
+- Maintain the strict one-way dependency boundary between the MCP runtime spine and the desktop workbench:
+  - **Framework spine (`src-tauri/src/keel_core/`, `src/keel-sdk/`)**: Embedded `rmcp` + `axum` Streamable HTTP MCP server, tool safety registry (`Safe` / `ConfirmRequired`), telemetry events, and React hooks. **`keel_core` and `keel-sdk` must never import or depend on `workbench` business modules.**
+  - **Workbench application (`src-tauri/src/workbench/`, `src/App.tsx`, `src/components/`)**: Windows 11 host inspection, dev-environment tools, and desktop UI. `workbench` attaches tools to `KeelToolRegistry`.
 
 ## Project Stack
 
-- This project is a Tauri v2 desktop app with React, TypeScript, Vite, Tailwind CSS v4, shadcn/ui, and pnpm.
-- Use pnpm for all JavaScript package operations.
-- Do not introduce npm, yarn, `package-lock.json`, or `yarn.lock`.
-- Keep `pnpm-lock.yaml` committed when dependencies change.
+- Tauri v2 desktop app (single-instance + system tray), Rust 2021, `rmcp` v3.10, `axum` v0.8, `tokio`, `windows` v0.61.
+- React 19, TypeScript 5.8, Vite 7, Tailwind CSS v4 (`@tailwindcss/vite`), `shadcn/ui` (`radix-nova`), Lucide icons, and `pnpm`.
+- Use `pnpm` for all JavaScript package operations. Do not introduce `npm`, `yarn`, `package-lock.json`, or `yarn.lock`.
+- Keep `pnpm-lock.yaml` committed whenever dependencies change.
 
 ## Common Commands
 
@@ -16,109 +23,78 @@ pnpm install
 pnpm tauri dev
 pnpm bindings
 pnpm build
+cargo test --manifest-path src-tauri/Cargo.toml
 pnpm tauri build
 ```
 
-- `pnpm bindings` regenerates frontend TypeScript bindings from Rust.
+- `pnpm bindings` runs the `export-bindings` Rust binary to regenerate `src/bindings.ts`.
 - `pnpm build` runs `pnpm bindings` before `tsc` and `vite build`.
-- Tauri's `beforeDevCommand` and `beforeBuildCommand` should continue to use pnpm.
+- Tauri's `beforeDevCommand` and `beforeBuildCommand` must continue to use `pnpm`.
 
-## TypeScript And Tauri Commands
+## TypeScript & Tauri Specta Bindings
 
-- Use `tauri-specta` for typed Rust-to-TypeScript command bindings.
-- Do not hand-write frontend calls like `invoke("command_name", ...)` when a typed binding exists.
-- Frontend code should import generated commands from `src/bindings.ts`:
+- Use `tauri-specta` (`=2.0.0-rc.25`) for typed Rust-to-TypeScript commands **and** events.
+- Do not hand-write frontend calls like `invoke("command_name", ...)` or raw untyped event strings when a typed binding exists.
+- Import generated commands and events from `@/bindings`:
 
 ```ts
-import { commands } from "./bindings";
+import { commands, events } from "@/bindings";
 ```
 
-- `src/bindings.ts` is generated. Do not edit it manually.
-- When adding a new Rust command:
-  - Add both `#[tauri::command]` and `#[specta::specta]`.
-  - Prefer owned command inputs such as `String` over borrowed inputs such as `&str`.
-  - Register the command in `specta_builder()` via `collect_commands![...]`.
-  - Run `pnpm bindings` and update frontend imports/calls.
-- When adding Rust data types that cross the Tauri boundary, derive the relevant Serde traits and `specta::Type`.
-- Keep Specta beta dependencies version-pinned with `=` unless intentionally upgrading the binding stack.
+- `src/bindings.ts` is generated. Never edit it manually.
+- When adding a new Rust command or event:
+  - Commands: annotate with `#[tauri::command]` and `#[specta::specta]`, prefer owned inputs (`String` over `&str`), and register in `collect_commands![...]`.
+  - Events: derive `serde::Serialize`, `serde::Deserialize`, `specta::Type`, and `tauri_specta::Event`, register in `collect_events![...]`, and keep `specta_builder.mount_events(app)` in `setup()`.
+  - Run `pnpm bindings` and verify `tsc` passes.
+- Keep Specta RC dependencies version-pinned with `=` unless intentionally upgrading the binding stack.
 
-## Tailwind And shadcn/ui
+## Windows 11 Native Window Chrome Rules
 
-- Tailwind CSS is configured through the Vite plugin `@tailwindcss/vite`.
-- The global Tailwind/shadcn CSS entry is `src/index.css`.
-- The import alias is `@/* -> ./src/*`.
-- shadcn/ui uses the `radix-nova` style, Radix base, Lucide icons, and CSS variables.
-- Add shadcn components with `pnpm dlx shadcn@latest add <component>`.
-- Check `pnpm dlx shadcn@latest info --json` before assuming a component is installed.
-- Generated shadcn component source lives in `src/components/ui`.
-- Keep shared helpers in `src/lib`, especially `src/lib/utils.ts`.
-- Prefer shadcn components over custom styled markup for common UI primitives.
-- Use semantic tokens such as `bg-background`, `text-muted-foreground`, `border-border`, and `bg-card`.
-- Use `gap-*` for spacing instead of `space-x-*` or `space-y-*`.
-- Use `cn()` for conditional class composition.
-- Use Lucide icons in buttons with `data-icon="inline-start"` or `data-icon="inline-end"`.
-- Do not manually edit `components.json` unless the shadcn CLI cannot express the required change.
-- Do not let old global CSS rules target all `button` or `input` elements; that will break shadcn variants.
+- KeelDesk uses **authentic Windows 11 native window chrome** rather than custom HTML titlebars or transparent frameless overlays.
+- `src-tauri/tauri.conf.json` must keep:
+  - `"decorations": true`
+  - `"transparent": false`
+  - `"backgroundColor": "#111116"`
+- This preserves native Windows 11 window dragging, Snap Layouts flyout on the Maximize button, native caption glyphs, and the **Windows 11 system-default outer window border**.
+- In `src-tauri/src/win11.rs`, theme the native titlebar with `DwmSetWindowAttribute`:
+  - `DWMWA_USE_IMMERSIVE_DARK_MODE` (`1`)
+  - `DWMWA_CAPTION_COLOR` (`0x00161111`, matching `.dark` `--background: #111116` pixel-for-pixel)
+  - `DWMWA_TEXT_COLOR` (`0x00F5F2F2`)
+- **Do not** override `DWMWA_BORDER_COLOR` with a custom color, and **do not** reintroduce frameless drag handles or custom HTML Min/Max/Close buttons unless explicitly requested.
+- Closing the main window hides it to the system tray (`tray.rs`) while the embedded MCP server continues running; only the tray `Quit` action shuts down `KeelRuntime` and exits the process.
 
-## Window Chrome Rules
+## `shadcn/ui` + `modern-web-guidance` UI Specification
 
-- This app uses a custom Tauri window chrome.
-- `src-tauri/tauri.conf.json` should keep:
-  - `decorations: false`
-  - `transparent: true`
-- The visual titlebar may be hidden, but a drag region must remain.
-- For simple static draggable areas, `data-tauri-drag-region` is acceptable.
-- For the KeelDesk top drag handle, prefer the explicit `startDragging()` pattern below instead of `data-tauri-drag-region`.
-- Put `data-tauri-drag-region="false"` on interactive controls only when they are inside a draggable region.
-- Window controls should call Tauri window APIs from `@tauri-apps/api/window`.
-- On Windows, the purple border is applied through DWM from Rust. Keep that logic in Tauri/Rust rather than trying to fake the outer OS border with CSS.
-- Do not try to change the native Windows corner radius unless explicitly asked. It is mostly OS-managed.
+Consult the `modern-web-guidance` skill (when available in your agent environment) and follow these mandatory desktop web standards whenever implementing or refactoring HTML, CSS layout, scrollbars, skeletons, accessibility, or client-side interactions:
 
-## Drag Handle Pattern
-
-- The transparent titlebar should not consume clicks across its full width. Use `pointer-events: none` on the titlebar shell, then restore `pointer-events: auto` only on the drag handle hit area and window controls.
-- Keep the drag handle visually hidden by default. Reveal it with CSS `:hover`, `:active`, and an `.is-active` class while dragging.
-- Start native dragging immediately on left `pointerdown` with `getCurrentWindow().startDragging()`. Do not wait for `requestAnimationFrame` or animation paint before starting the drag; that makes the window feel sticky.
-- Do not rely on WebView `mouseup`, `pointerup`, `pointercancel`, or `setPointerCapture` to detect the end of a native window drag. During `startDragging()`, the OS can take over and the WebView may not receive those events reliably.
-- While dragging, keep the handle visible by polling the generated `commands.isPrimaryMouseButtonDown()` binding at a short interval, currently about `80ms`.
-- Hide the handle only after the system reports that the primary mouse button is no longer pressed, with a short fade delay, currently about `180ms`.
-- On Windows, implement the mouse-button check in Rust with `GetAsyncKeyState(VK_LBUTTON)`. Keep the Windows dependency feature `Win32_UI_Input_KeyboardAndMouse` enabled in `src-tauri/Cargo.toml`.
-- Register the mouse-button command with `tauri-specta`, regenerate `src/bindings.ts`, and call the generated binding from React. Do not hand-write `invoke("is_primary_mouse_button_down")`.
-- Clean up drag hide and poll timers in React unmount cleanup.
-- This pattern exists because native window dragging crosses out of the normal DOM event lifecycle. CSS hover is fine for the idle hint, but drag state must be based on OS mouse-button state.
-
-## UI Direction
-
-- Preferred visual direction: refined Fluent 2 inspired, quiet, precise, glassy where useful.
-- Avoid cheap HUD layers, busy neon effects, and decorative clutter.
-- Avoid hover scale effects on window controls and ordinary buttons.
-- Prefer subtle state changes: color, opacity, shadow, border, or background.
-- Window controls should feel intentional and polished, not plain text symbols dropped into buttons.
-- Keep the transparent titlebar visually hidden while preserving drag behavior.
-- Maintain the mysterious purple accent as the signature window edge treatment.
-
-## Editing Rules
-
-- Keep changes scoped to the requested behavior.
-- Follow the existing React + CSS structure unless there is a clear reason to refactor.
-- Use generated bindings for frontend/backend contracts.
-- Prefer small, readable components over premature abstractions.
-- Do not edit generated files manually.
-- Do not overwrite unrelated user changes.
+1. **Root Dark-Mode & `color-scheme` Contract**:
+   - Keep `<html lang="zh-CN" class="dark">` and `<meta name="color-scheme" content="dark" />` in `index.html`, paired with `:root { color-scheme: dark; }` and `.dark` tokens in `src/index.css`.
+   - This guarantees WebView2 paints root surfaces, Radix `document.body` portals, native form controls, and fallback scrollbars in dark mode from frame 0.
+2. **Constrained Desktop Viewport & Zero Page Scrollbars**:
+   - Lock `html, body, #root` (`src/App.css`) and the outer desktop shell to `block-size: 100dvh` (`h-dvh`) with `overflow: clip`.
+   - Always place `min-h-0` and `min-w-0` on nested Flex/Grid tracks so child scroll containers shrink within the window rather than triggering a browser-level scrollbar.
+3. **Scroll Containment & Scrollbar Contrast**:
+   - Wrap scrollable inner lists and tables in `shadcn/ui`'s `<ScrollArea>`.
+   - Apply `overscroll-behavior: contain` on nested scrollports and maintain WCAG ≥ 3.5:1 scrollbar thumb contrast (`scrollbar-color`) against dark card surfaces.
+4. **Two-Stage Zero-Flash Boot Skeleton**:
+   - **Stage 1 (`index.html`)**: Inline `<style id="keel-critical-boot">` + pure HTML 3-card skeleton (`role="progressbar"`) rendered immediately at 0ms before JS/CSS bundles finish loading, and removed on React mount; honor `prefers-reduced-motion: reduce`.
+   - **Stage 2 (`src/components/WorkbenchSkeleton.tsx`)**: Geometry-matched `grid-cols-12` (`col-span-7` / `col-span-5`) skeleton built with `shadcn/ui` `Card` + `Skeleton` (`motion-safe:animate-pulse`) displayed while initial Tauri IPC snapshots resolve.
+5. **Genuine `shadcn/ui` (`radix-nova`) Discipline**:
+   - Check `pnpm dlx shadcn@latest info --json` before assuming a component is installed; add new components via `pnpm dlx shadcn@latest add <component>`.
+   - After running `shadcn add`, verify generated files in `src/components/ui/` import `cn` from `@/lib/utils` (and remove any spurious `"cn"` npm package if added by upstream registry quirks).
+   - Prefer `shadcn/ui` primitives (`Card`, `Tabs`, `Table`, `ScrollArea`, `Tooltip`, `Alert`, `Skeleton`, `Badge`, `Button`, `Input`, `Separator`) over ad-hoc styled `<div>` panels.
+   - Use semantic tokens (`bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`), `gap-*` instead of `space-x-*`/`space-y-*`, `size-*` when width equals height, `tabular-nums` on dynamic metrics/ports/latencies, and `data-icon="inline-start"` / `data-icon="inline-end"` on Lucide icons inside `Button`.
+6. **Accessibility & Windows High Contrast (`forced-colors`)**:
+   - Do not rely on native HTML `title` attributes for truncated descriptions or status badges — use keyboard-accessible `shadcn/ui` `<Tooltip>` (`TooltipProvider` mounted once at the app root) with `aria-hidden="true"` when tooltip text duplicates existing accessible content.
+   - Announce clipboard copy state transitions and runtime self-test results via `aria-live="polite"`.
+   - Prefer border-based active indicators (`border-block-end`) over background-painted pseudo-elements so active tab states survive Windows High Contrast (`forced-colors: active`).
 
 ## Verification
 
-Before claiming a change is complete, run the narrowest useful checks:
+Before considering a change complete, run:
 
 ```bash
 pnpm bindings
 pnpm build
-cargo check --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
-
-For visual/window changes, also run the Tauri app and manually verify:
-
-- The app opens.
-- The window can be dragged.
-- Close, minimize, and maximize controls work.
-- The transparent window and purple border still render correctly.
