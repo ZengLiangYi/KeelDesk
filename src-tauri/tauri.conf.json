@@ -13,10 +13,14 @@
     "windows": [
       {
         "title": "KeelDesk",
-        "width": 800,
-        "height": 600,
-        "decorations": false,
-        "transparent": true
+        "width": 1080,
+        "height": 700,
+        "minWidth": 880,
+        "minHeight": 580,
+        "center": true,
+        "decorations": true,
+        "transparent": false,
+        "backgroundColor": "#111116"
       }
     ],
     "security": {
