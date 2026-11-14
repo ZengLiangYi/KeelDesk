@@ -7,15 +7,55 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 export const commands = {
 	getKeelRuntimeSnapshot: () => typedError<KeelRuntimeSnapshot, string>(__TAURI_INVOKE("get_keel_runtime_snapshot")),
 	selfTestKeelPing: (message: string | null) => typedError<KeelPingSelfTestResult, string>(__TAURI_INVOKE("self_test_keel_ping", { message })),
+	resolveKeelToolApproval: (requestId: string, decision: ToolApprovalDecision) => typedError<PendingToolApproval, string>(__TAURI_INVOKE("resolve_keel_tool_approval", { requestId, decision })),
+	clearKeelSessionAllowlist: () => typedError<KeelRuntimeSnapshot, string>(__TAURI_INVOKE("clear_keel_session_allowlist")),
 	getWin11HostSummary: () => __TAURI_INVOKE<Win11HostSummary>("get_win11_host_summary"),
+	scanWin11DevEnv: () => typedError<DevEnvScanReport, string>(__TAURI_INVOKE("scan_win11_dev_env")),
+	listWin11ActivePorts: (port: number | null, processFilter: string | null) => typedError<ActivePortReport, string>(__TAURI_INVOKE("list_win11_active_ports", { port, processFilter })),
+	drillKillPortApproval: (port: number | null, reason: string | null) => typedError<KillPortProcessResult, string>(__TAURI_INVOKE("drill_kill_port_approval", { port, reason })),
 };
 
 /** Events */
 export const events = {
 	keelRuntimeUpdatedEvent: makeEvent<KeelRuntimeUpdatedEvent>("keel-runtime-updated-event"),
+	toolApprovalRequestedEvent: makeEvent<ToolApprovalRequestedEvent>("tool-approval-requested-event"),
 };
 
 /* Types */
+export type ActivePortEntry = {
+	port: number,
+	protocol: string,
+	local_addr: string,
+	pid: number,
+	process_name: string,
+	exe_path: string | null,
+	is_loopback: boolean,
+	is_keeldesk_self: boolean,
+};
+
+export type ActivePortReport = {
+	captured_at_iso: string,
+	total_listening: number,
+	entries: ActivePortEntry[],
+};
+
+export type DevEnvScanReport = {
+	scanned_at_iso: string,
+	host: Win11HostSummary,
+	path_entry_count: number,
+	installed_count: number,
+	probes: DevToolProbe[],
+};
+
+export type DevToolProbe = {
+	id: string,
+	display_name: string,
+	installed: boolean,
+	version: string | null,
+	executable_path: string | null,
+	probe_ms: number,
+};
+
 export type KeelPingPayload = {
 	ok: boolean,
 	server: string,
@@ -43,6 +83,8 @@ export type KeelRuntimeSnapshot = {
 	total_calls: number,
 	tools: KeelToolDescriptor[],
 	recent_calls: ToolCallLogEntry[],
+	pending_approvals: PendingToolApproval[],
+	session_allowlist: SessionAllowlistEntry[],
 };
 
 export type KeelRuntimeUpdatedEvent = KeelRuntimeSnapshot;
@@ -55,6 +97,38 @@ export type KeelToolDescriptor = {
 	source: string,
 	safety: ToolSafetyTier,
 };
+
+export type KillPortProcessResult = {
+	port: number,
+	dry_run: boolean,
+	target_pids: number[],
+	terminated_pids: number[],
+	process_names: string[],
+	message: string,
+};
+
+export type PendingToolApproval = {
+	request_id: string,
+	tool_name: string,
+	tool_source: string,
+	description: string,
+	arguments_json: string,
+	caller_hint: string | null,
+	session_scope: string,
+	requested_at_iso: string,
+	expires_at_iso: string,
+	timeout_secs: number,
+};
+
+export type SessionAllowlistEntry = {
+	session_scope: string,
+	tool_name: string,
+	granted_at_iso: string,
+};
+
+export type ToolApprovalDecision = "approve_once" | "approve_for_session" | "deny";
+
+export type ToolApprovalRequestedEvent = PendingToolApproval;
 
 export type ToolCallLogEntry = {
 	id: number,

@@ -15,9 +15,17 @@ fn specta_builder() -> Builder<tauri::Wry> {
         .commands(collect_commands![
             keel_core::commands::get_keel_runtime_snapshot,
             keel_core::commands::self_test_keel_ping,
+            keel_core::commands::resolve_keel_tool_approval,
+            keel_core::commands::clear_keel_session_allowlist,
             workbench::get_win11_host_summary,
+            workbench::scan_win11_dev_env,
+            workbench::list_win11_active_ports,
+            workbench::drill_kill_port_approval,
         ])
-        .events(collect_events![keel_core::KeelRuntimeUpdatedEvent])
+        .events(collect_events![
+            keel_core::KeelRuntimeUpdatedEvent,
+            keel_core::ToolApprovalRequestedEvent,
+        ])
 }
 
 pub fn export_typescript_bindings() {
