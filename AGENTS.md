@@ -63,31 +63,27 @@ import { commands, events } from "@/bindings";
 - **Do not** override `DWMWA_BORDER_COLOR` with a custom color, and **do not** reintroduce frameless drag handles or custom HTML Min/Max/Close buttons unless explicitly requested.
 - Closing the main window hides it to the system tray (`tray.rs`) while the embedded MCP server continues running; only the tray `Quit` action shuts down `KeelRuntime` and exits the process.
 
-## `shadcn/ui` + `modern-web-guidance` UI Specification
+## KeelDesk Design System ("The Graphite Spine" — `shadcn/ui` + `modern-web-guidance`)
 
-Consult the `modern-web-guidance` skill (when available in your agent environment) and follow these mandatory desktop web standards whenever implementing or refactoring HTML, CSS layout, scrollbars, skeletons, accessibility, or client-side interactions:
+Read [`PRODUCT.md`](PRODUCT.md) and [`DESIGN.md`](DESIGN.md) before designing or refactoring UI. Consult the `modern-web-guidance` / `impeccable` skills (when available) and enforce these unified system hierarchies across `src/styles/tokens.css`, `src/components/ui/`, and `src/components/ds/`:
 
-1. **Root Dark-Mode & `color-scheme` Contract**:
-   - Keep `<html lang="zh-CN" class="dark">` and `<meta name="color-scheme" content="dark" />` in `index.html`, paired with `:root { color-scheme: dark; }` and `.dark` tokens in `src/index.css`.
-   - This guarantees WebView2 paints root surfaces, Radix `document.body` portals, native form controls, and fallback scrollbars in dark mode from frame 0.
-2. **Constrained Desktop Viewport & Zero Page Scrollbars**:
-   - Lock `html, body, #root` (`src/App.css`) and the outer desktop shell to `block-size: 100dvh` (`h-dvh`) with `overflow: clip`.
-   - Always place `min-h-0` and `min-w-0` on nested Flex/Grid tracks so child scroll containers shrink within the window rather than triggering a browser-level scrollbar.
-3. **Scroll Containment & Scrollbar Contrast**:
-   - Wrap scrollable inner lists and tables in `shadcn/ui`'s `<ScrollArea>`.
-   - Apply `overscroll-behavior: contain` on nested scrollports and maintain WCAG ≥ 3.5:1 scrollbar thumb contrast (`scrollbar-color`) against dark card surfaces.
-4. **Two-Stage Zero-Flash Boot Skeleton**:
-   - **Stage 1 (`index.html`)**: Inline `<style id="keel-critical-boot">` + pure HTML 3-card skeleton (`role="progressbar"`) rendered immediately at 0ms before JS/CSS bundles finish loading, and removed on React mount; honor `prefers-reduced-motion: reduce`.
-   - **Stage 2 (`src/components/WorkbenchSkeleton.tsx`)**: Geometry-matched `grid-cols-12` (`col-span-7` / `col-span-5`) skeleton built with `shadcn/ui` `Card` + `Skeleton` (`motion-safe:animate-pulse`) displayed while initial Tauri IPC snapshots resolve.
-5. **Genuine `shadcn/ui` (`radix-nova`) Discipline**:
-   - Check `pnpm dlx shadcn@latest info --json` before assuming a component is installed; add new components via `pnpm dlx shadcn@latest add <component>`.
-   - After running `shadcn add`, verify generated files in `src/components/ui/` import `cn` from `@/lib/utils` (and remove any spurious `"cn"` npm package if added by upstream registry quirks).
-   - Prefer `shadcn/ui` primitives (`Card`, `Tabs`, `Table`, `ScrollArea`, `Tooltip`, `Alert`, `Skeleton`, `Badge`, `Button`, `Input`, `Separator`) over ad-hoc styled `<div>` panels.
-   - Use semantic tokens (`bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`), `gap-*` instead of `space-x-*`/`space-y-*`, `size-*` when width equals height, `tabular-nums` on dynamic metrics/ports/latencies, and `data-icon="inline-start"` / `data-icon="inline-end"` on Lucide icons inside `Button`.
-6. **Accessibility & Windows High Contrast (`forced-colors`)**:
-   - Do not rely on native HTML `title` attributes for truncated descriptions or status badges — use keyboard-accessible `shadcn/ui` `<Tooltip>` (`TooltipProvider` mounted once at the app root) with `aria-hidden="true"` when tooltip text duplicates existing accessible content.
-   - Announce clipboard copy state transitions and runtime self-test results via `aria-live="polite"`.
-   - Prefer border-based active indicators (`border-block-end`) over background-painted pseudo-elements so active tab states survive Windows High Contrast (`forced-colors: active`).
+1. **Dark-Only Graphite Ramp & `color-scheme` Contract**:
+   - Keep `<html lang="zh-CN" class="dark">` and `<meta name="color-scheme" content="dark" />` in `index.html`, backed by single-track dark tokens in `src/styles/tokens.css` (`--surface-sunken: #0b0b0f`, `--surface-canvas: #111116` pixel-locked to Win32 `DWMWA_CAPTION_COLOR`, `--surface-subtle: #14141b`, `--surface-panel: #16161d`, `--surface-overlay: #1c1c25`).
+   - Maintain ≥95% monochrome Cursor/Vercel restraint; reserve `--primary` (`#7c66ff` Keel Indigo) for active focus/primary CTAs (≤5%) and `--status-{ok,warn,danger,info}` strictly for live telemetry states.
+2. **Unified Six-Step Desktop Typography Hierarchy**:
+   - Use exclusively the six semantic Tailwind v4 type utilities: `text-title-lg` (`18px/24px`), `text-title` (`15px/22px`), `text-body` (`13px/20px` desktop baseline), `text-caption` (`12px/16px`), `text-micro` (`11px/16px` strict legibility floor), and `text-code` (`12px/20px` `Cascadia Code`).
+   - **Prohibited**: Arbitrary bracketed font sizes (`text-[10px]`, `text-[11px]`, `text-[0.8rem]`) and fluid `clamp()` scales. Always pair dynamic numbers/ports/PIDs/latencies/timers with `font-mono tabular-nums`.
+3. **Unified `4px` Spacing Grid, Control Heights, & `12px` Plumb Line**:
+   - Align `CardHeader`, filter toolbars, outer `Table` columns (`pl-3` / `pr-3`), and `CardFooter` on the unified `12px` (`--space-card-pad` / `px-3`) vertical plumb line (`20px` inside modals).
+   - Standardize interactive control heights to `xs: 24px` (`h-6`), `sm: 28px` (`h-7`), `md: 32px` (`h-8`), and `lg: 36px` (`h-9`). Use `gap-*` (never `space-x-*`/`space-y-*`).
+4. **Unified Concentric `2px` Border-Radius Hierarchy**:
+   - Step nested radii down concentrically: floating modals/sheets `rounded-xl` (`12px`) -> primary `Card` panels `rounded-lg` (`10px`) -> nested `CodeWell` / `Alert` `rounded-md` (`8px`) -> interactive `Button` / `Input` / menu items `rounded-sm` (`6px`) -> technical `Badge` / `Kbd` / `MetricPill` `rounded-xs` (`4px`). Reserve `rounded-full` strictly for circular `StatusDot` and `Switch` elements; never use `rounded-[min(...)]` formulas or bubbly pill text badges.
+5. **Constrained `100dvh` Viewport, Scroll Containment & Two-Stage Skeleton**:
+   - Lock `html, body, #root` and the outer desktop shell to `100dvh` (`h-dvh`) with `overflow: clip`. Place `min-h-0 min-w-0` on every nested Flex/Grid/Tabs track, wrap scrollable inner lists/tables in `<ScrollArea>`, and keep `overscroll-behavior: contain` + WCAG ≥ 3.5:1 `scrollbar-color`.
+   - Keep Stage 1 (`index.html` `#keel-critical-boot`) and Stage 2 (`src/components/WorkbenchSkeleton.tsx`) geometry and hex tokens synchronized whenever canvas/panel tokens change.
+6. **Component Layering (`ui/` + `ds/`) & Accessibility (`forced-colors`)**:
+   - Compose `shadcn/ui` (`radix-nova`) primitives in `src/components/ui/` and reusable KeelDesk domain patterns in `src/components/ds/` (`StatusDot`, `StatusBadge`, `SafetyTierBadge`, `TruncatedText`, `CodeWell`, `CopyButton`, `MetricPill`, `EmptyState`). Verify `cn` imports come from `@/lib/utils`.
+   - Never use HTML `title` attributes — use `<TruncatedText>` / `<Tooltip>` (`TooltipProvider` mounted once at root). Announce copy/drill transitions via `aria-live="polite"`, respect `prefers-reduced-motion: reduce`, and preserve border-based active indicators under Windows High Contrast (`forced-colors: active`).
 
 ## Verification
 

@@ -1,0 +1,299 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-14T00:00:00.000Z",
+  "title": "Design System: KeelDesk",
+  "extensions": {
+    "colorMeta": {
+      "keel-indigo": {
+        "role": "primary",
+        "displayName": "Keel Indigo",
+        "canonical": "oklch(0.635 0.195 286)",
+        "tonalRamp": [
+          "oklch(0.22 0.08 286)",
+          "oklch(0.32 0.13 286)",
+          "oklch(0.44 0.17 286)",
+          "oklch(0.55 0.195 286)",
+          "oklch(0.635 0.195 286)",
+          "oklch(0.73 0.15 286)",
+          "oklch(0.84 0.09 286)",
+          "oklch(0.94 0.035 286)"
+        ]
+      },
+      "surface-sunken": {
+        "role": "neutral",
+        "displayName": "Abyss Sunken",
+        "canonical": "#0b0b0f",
+        "tonalRamp": [
+          "#0b0b0f",
+          "#111116",
+          "#14141b",
+          "#16161d",
+          "#1c1c25",
+          "#20202b",
+          "#262633",
+          "#343446"
+        ]
+      },
+      "surface-canvas": {
+        "role": "neutral",
+        "displayName": "DWM Canvas",
+        "canonical": "#111116",
+        "tonalRamp": [
+          "#0b0b0f",
+          "#111116",
+          "#16161d",
+          "#1c1c25",
+          "#262633",
+          "#3a3a4d",
+          "#6f6f84",
+          "#b8b8c7"
+        ]
+      },
+      "surface-panel": {
+        "role": "neutral",
+        "displayName": "Graphite Panel",
+        "canonical": "#16161d",
+        "tonalRamp": [
+          "#0b0b0f",
+          "#111116",
+          "#14141b",
+          "#16161d",
+          "#1c1c25",
+          "#20202b",
+          "#262633",
+          "#3e3e52"
+        ]
+      },
+      "ink-primary": {
+        "role": "neutral",
+        "displayName": "Crisp Ink",
+        "canonical": "#f3f3f7",
+        "tonalRamp": [
+          "#262633",
+          "#454559",
+          "#68687e",
+          "#8c8ca1",
+          "#a6a6b8",
+          "#b8b8c7",
+          "#dcdce6",
+          "#f3f3f7"
+        ]
+      },
+      "status-ok": {
+        "role": "secondary",
+        "displayName": "Signal Emerald",
+        "canonical": "oklch(0.73 0.165 154)",
+        "tonalRamp": [
+          "oklch(0.24 0.06 154)",
+          "oklch(0.35 0.10 154)",
+          "oklch(0.48 0.14 154)",
+          "oklch(0.61 0.16 154)",
+          "oklch(0.73 0.165 154)",
+          "oklch(0.81 0.12 154)",
+          "oklch(0.89 0.07 154)",
+          "oklch(0.95 0.03 154)"
+        ]
+      },
+      "status-warn": {
+        "role": "secondary",
+        "displayName": "Amber Gate",
+        "canonical": "oklch(0.79 0.155 76)",
+        "tonalRamp": [
+          "oklch(0.25 0.06 76)",
+          "oklch(0.38 0.10 76)",
+          "oklch(0.52 0.13 76)",
+          "oklch(0.66 0.15 76)",
+          "oklch(0.79 0.155 76)",
+          "oklch(0.85 0.11 76)",
+          "oklch(0.91 0.06 76)",
+          "oklch(0.96 0.025 76)"
+        ]
+      },
+      "status-danger": {
+        "role": "secondary",
+        "displayName": "Coral Intercept",
+        "canonical": "oklch(0.66 0.20 23)",
+        "tonalRamp": [
+          "oklch(0.23 0.08 23)",
+          "oklch(0.34 0.13 23)",
+          "oklch(0.46 0.17 23)",
+          "oklch(0.57 0.19 23)",
+          "oklch(0.66 0.20 23)",
+          "oklch(0.76 0.14 23)",
+          "oklch(0.86 0.08 23)",
+          "oklch(0.94 0.03 23)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Window Brand / Modal Title (type-title-lg)",
+        "purpose": "18px/24px Semibold. Top-bar brand identity and primary modal headings."
+      },
+      "headline": {
+        "displayName": "Panel Title (type-title)",
+        "purpose": "15px/22px Semibold. Workbench CardTitle and drawer section headings."
+      },
+      "body": {
+        "displayName": "Desktop Base (type-body)",
+        "purpose": "13px/20px Regular/Medium. Canonical desktop text for buttons, inputs, table cells, and descriptions."
+      },
+      "label": {
+        "displayName": "Caption & Column Header (type-caption)",
+        "purpose": "12px/16px Medium. Card subtitles, sticky table headers, tooltips, and footer strips."
+      },
+      "micro": {
+        "displayName": "Technical Tag (type-micro)",
+        "purpose": "11px/16px Cascadia Code Medium (tabular-nums). Technical badges, protocol chips, Kbd caps, and call #id counters."
+      },
+      "code": {
+        "displayName": "Code & Payload (type-code)",
+        "purpose": "12px/20px Cascadia Code Regular. CLI configuration snippets and JSON payloads inside CodeWell."
+      }
+    },
+    "shadows": [
+      {
+        "name": "resting-panel",
+        "value": "none",
+        "purpose": "All resting cards and wells use 1px translucent hairlines and tonal surface contrast instead of shadows."
+      },
+      {
+        "name": "shadow-popover",
+        "value": "0 8px 24px -4px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12)",
+        "purpose": "Dropdown menus, Select popovers, and keyboard tooltips."
+      },
+      {
+        "name": "shadow-modal",
+        "value": "0 24px 64px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.15)",
+        "purpose": "ToolApprovalDialog, Dialog, and Sheet drawers over dimmed canvas."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-quart",
+        "value": "cubic-bezier(0.25, 1, 0.5, 1)",
+        "purpose": "150ms state transitions on buttons, tabs, inputs, and row highlights."
+      },
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "220ms modal and drawer entrance transitions."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary confirmation action in Keel Indigo (32px height, 6px radius).",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 6 9 17l-5-5\"/></svg><span>允许本次执行</span></button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; background: var(--keel-indigo, #7c66ff); color: #fafaff; border: 1px solid transparent; border-radius: var(--radius-sm, 6px); font-family: var(--font-sans, 'Segoe UI Variable Text', system-ui, sans-serif); font-size: 13px; font-weight: 500; cursor: pointer; transition: background 150ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-primary:hover { background: var(--keel-indigo-hover, #8e7bff); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(124, 102, 255, 0.5); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Graphite hairline secondary action (32px height, 6px radius).",
+      "html": "<button class=\"ds-btn-outline\" type=\"button\">演练高危拦截</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; background: var(--surface-panel, #16161d); color: var(--ink-primary, #f3f3f7); border: 1px solid var(--border-default, rgba(255,255,255,0.09)); border-radius: var(--radius-sm, 6px); font-family: var(--font-sans, 'Segoe UI Variable Text', system-ui, sans-serif); font-size: 13px; font-weight: 500; cursor: pointer; transition: background 150ms cubic-bezier(0.25, 1, 0.5, 1), border-color 150ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-outline:hover { background: var(--surface-hover, #20202b); border-color: var(--border-strong, rgba(255,255,255,0.16)); } .ds-btn-outline:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(124, 102, 255, 0.5); }"
+    },
+    {
+      "name": "Sunken Search Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Abyss sunken (#0b0b0f) text input with 6px radius and 5.4:1 contrast placeholder.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"按端口、进程名或 PID 筛选…\" />",
+      "css": ".ds-input { height: 32px; width: 240px; padding: 0 10px; background: var(--surface-sunken, #0b0b0f); color: var(--ink-primary, #f3f3f7); border: 1px solid var(--border-default, rgba(255,255,255,0.09)); border-radius: var(--radius-sm, 6px); font-family: var(--font-sans, 'Segoe UI Variable Text', system-ui, sans-serif); font-size: 13px; transition: border-color 150ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow 150ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-input::placeholder { color: var(--ink-muted, #8c8ca1); } .ds-input:hover { border-color: var(--border-strong, rgba(255,255,255,0.16)); } .ds-input:focus-visible { outline: none; border-color: var(--keel-indigo, #7c66ff); box-shadow: 0 0 0 2px rgba(124, 102, 255, 0.35); }"
+    },
+    {
+      "name": "Technical Status & Safety Chips",
+      "kind": "chip",
+      "refersTo": "badge-technical",
+      "description": "4px crisp technical badges in 11px Cascadia Code with tabular-nums.",
+      "html": "<div class=\"ds-chip-row\"><span class=\"ds-chip ds-chip-ok\"><span class=\"ds-dot\"></span>127.0.0.1:19527</span><span class=\"ds-chip ds-chip-danger\">Confirm · 需审批</span></div>",
+      "css": ".ds-chip-row { display: inline-flex; gap: 8px; align-items: center; } .ds-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: var(--radius-xs, 4px); font-family: var(--font-mono, 'Cascadia Code', monospace); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 16px; } .ds-chip-ok { background: rgba(46, 196, 125, 0.13); color: #2ec47d; border: 1px solid rgba(46, 196, 125, 0.30); } .ds-chip-danger { background: rgba(242, 85, 90, 0.14); color: #f2555a; border: 1px solid rgba(242, 85, 90, 0.32); } .ds-dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }"
+    },
+    {
+      "name": "Line Navigation Tabs",
+      "kind": "nav",
+      "refersTo": "card-panel",
+      "description": "Forced-colors-resilient horizontal line tabs with 2px solid Keel Indigo underline.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\" type=\"button\">工具契约 (4)</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\" type=\"button\">端口治理</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\" type=\"button\">本机环境</button></div>",
+      "css": ".ds-tabs { display: flex; gap: 16px; padding: 0 12px; background: var(--surface-panel, #16161d); border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.06)); } .ds-tab { padding: 8px 2px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--ink-muted, #8c8ca1); font-family: var(--font-sans, 'Segoe UI Variable Text', system-ui, sans-serif); font-size: 12px; font-weight: 500; cursor: pointer; transition: color 150ms cubic-bezier(0.25, 1, 0.5, 1), border-color 150ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-tab:hover { color: var(--ink-secondary, #b8b8c7); } .ds-tab[aria-selected='true'] { color: var(--ink-primary, #f3f3f7); border-bottom-color: var(--keel-indigo, #7c66ff); }"
+    },
+    {
+      "name": "Graphite Panel & Sunken CodeWell",
+      "kind": "card",
+      "refersTo": "code-well",
+      "description": "10px Graphite Panel housing an 8px concentric Abyss Sunken (#0b0b0f) CLI CodeWell.",
+      "html": "<div class=\"ds-panel\"><div class=\"ds-panel-head\"><span>Claude Code MCP 接入</span><span class=\"ds-mono-meta\">HTTP</span></div><pre class=\"ds-code-well\"><code>claude mcp add --transport http keeldesk http://127.0.0.1:19527/mcp</code></pre></div>",
+      "css": ".ds-panel { background: var(--surface-panel, #16161d); color: var(--ink-primary, #f3f3f7); border: 1px solid var(--border-default, rgba(255,255,255,0.09)); border-radius: var(--radius-lg, 10px); padding: 12px; display: flex; flex-direction: column; gap: 8px; } .ds-panel-head { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-sans, 'Segoe UI Variable Text', system-ui, sans-serif); font-size: 13px; font-weight: 600; } .ds-mono-meta { font-family: var(--font-mono, 'Cascadia Code', monospace); font-size: 11px; color: var(--ink-muted, #8c8ca1); } .ds-code-well { margin: 0; padding: 10px 12px; background: var(--surface-sunken, #0b0b0f); border: 1px solid var(--border-subtle, rgba(255,255,255,0.06)); border-radius: var(--radius-md, 8px); font-family: var(--font-mono, 'Cascadia Code', monospace); font-size: 12px; line-height: 20px; color: var(--ink-primary, #f3f3f7); overflow-x: auto; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Graphite Spine",
+    "overview": "KeelDesk is a Windows 11-native MCP runtime daemon and developer environment workbench engineered with the austere, high-density clarity of Cursor and Vercel. Every screen operates inside a viewport-locked 100dvh desktop frame (overflow: clip) fused seamlessly to the native Win32 DWM dark caption bar. Rather than competing for attention with decorative gradients, heavy drop shadows, or spacious marketing cards, the interface recedes into crisp graphite-black surfaces, 1px translucent hairlines, and aligned monospace telemetry—surfacing visual urgency only when a ConfirmRequired safety gate demands human judgment.\n\nStructural consistency across typography, spacing, and concentric corner radii is the backbone of the system. Every text node maps to one of six fixed desktop type roles; every margin, gap, and cell gutter locks onto a 4px base grid aligned to a unified 12px panel plumb line; and every nested container steps down concentrically in 2px radius increments (12px -> 10px -> 8px -> 6px -> 4px).",
+    "keyCharacteristics": [
+      "Dark-Only Win11 DWM Fusion: Single-track graphite dark palette locked pixel-for-pixel to Win32 DWMWA_CAPTION_COLOR (#111116), paired with Windows High Contrast (forced-colors) fallbacks.",
+      "Unified Six-Role Desktop Type Scale: Fixed rem steps (18 / 15 / 13 / 12 / 11px + 12px mono code) tuned for 100%–200% Windows 11 desktop scaling with tabular-nums discipline.",
+      "12px Vertical Plumb-Line Rhythm: 4px base grid with unified 12px (spacing.md) panel chrome padding so headers, filter bars, table columns, and footers share one unbroken vertical axis.",
+      "Concentric 2px Corner Geometry: Strict five-tier corner hierarchy from 12px modals down to 4px technical chips.",
+      "State-Only Chromatic Signal: 95% monochrome graphite and Crisp White/Slate ink; Keel Indigo (<=5%) marks primary focus, while semantic status hues appear exclusively on live telemetry states."
+    ],
+    "rules": [
+      {
+        "name": "The DWM Pixel-Lock Rule",
+        "body": "surface-canvas must remain #111116 at all times to match DWMWA_CAPTION_COLOR (0x00161111) in src-tauri/src/win11.rs. Changing one without the other breaks the native window illusion and is forbidden.",
+        "section": "colors"
+      },
+      {
+        "name": "The Monochrome 95% Rule",
+        "body": "At rest, at least 95% of the viewport must remain monochrome graphite and neutral ink. Keel Indigo is capped at <=5% of screen area; never tint entire card backgrounds or decorative headers with brand color.",
+        "section": "colors"
+      },
+      {
+        "name": "The Six-Step Type Floor Rule",
+        "body": "Every text element must use one of the six semantic tokens (text-title-lg, text-title, text-body, text-caption, text-micro, text-code). Arbitrary bracketed pixel utilities (text-[10px], text-[11px], text-[0.8rem]) and fluid web clamp() scales are strictly prohibited; 11px (0.6875rem) is the absolute legibility floor.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Telemetry Rule",
+        "body": "Every port (:19527), PID, latency (2 ms), counter, timestamp (14:08:32), and approval countdown (58s) must render in --font-mono with font-variant-numeric: tabular-nums so live updates never cause horizontal layout jitter.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline-Over-Shadow Rule",
+        "body": "Resting workbench containers never cast drop shadows and never nest cards inside cards. Inner grouping inside a panel uses sunken #0b0b0f wells (CodeWell) or 1px border-subtle dividers.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Semantic Z-Index Rule",
+        "body": "Stacking contexts use exclusively the semantic scale (sticky: 10, dropdown: 30, drawer: 40, modal: 50, toast: 60, tooltip: 70). Arbitrary values like z-[999] are forbidden.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do lock html, body, #root and the root workbench shell to 100dvh with overflow: clip, placing min-h-0 min-w-0 on every nested Flex/Grid/Tabs track and wrapping scrollable regions in <ScrollArea>.",
+      "Do align CardHeader, toolbar strips, outer TableHead/TableCell padding, and CardFooter on the unified 12px (px-3) horizontal plumb line.",
+      "Do follow the concentric 2px radius step-down (12px modal -> 10px card -> 8px well/alert -> 6px button/input -> 4px badge/kbd).",
+      "Do use exclusively the six semantic typography utilities (text-title-lg, text-title, text-body, text-caption, text-micro, text-code) and apply font-mono tabular-nums to all ports, PIDs, durations, and counters.",
+      "Do wrap truncated paths, versions, and descriptions in <TruncatedText> (keyboard-focusable Radix <Tooltip> with aria-hidden=\"true\" duplicate suppression) rather than native title attributes.",
+      "Do synchronize index.html's inline #keel-critical-boot skeleton colors and radii whenever canvas or panel tokens change."
+    ],
+    "donts": [
+      "Don't use gradient text (background-clip: text), neon AI glows, or decorative glassmorphism across workbench panels.",
+      "Don't use colored side-stripe borders (border-left or border-right greater than 1px) on alerts, rows, or cards.",
+      "Don't use spacious SaaS marketing hero cards, bubbly rounded-full text badges, or bounce/elastic motion curves.",
+      "Don't introduce browser-style page scrollbars, custom HTML Min/Max/Close window buttons, or uncalibrated light-mode tokens that break the #111116 Win32 DWM titlebar fusion.",
+      "Don't write arbitrary font sizes (text-[10px], text-[11px], clamp()), arbitrary rounded-[min(...)] corner formulas, or space-x-* / space-y-* margin utilities.",
+      "Don't nest <Card> inside <Card>; use sunken #0b0b0f wells (<CodeWell>) or 1px hairlines for inner structure."
+    ]
+  }
+}
