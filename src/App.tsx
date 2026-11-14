@@ -2,18 +2,26 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIcon,
   AlertCircleIcon,
+  CheckCircle2Icon,
   CheckIcon,
   CopyIcon,
+  KeyRoundIcon,
   LayersIcon,
   SendHorizontalIcon,
+  ShieldAlertIcon,
   ShieldCheckIcon,
+  ShieldXIcon,
   TerminalIcon,
+  XIcon,
 } from "lucide-react";
 import {
   commands,
   type KeelServerStatus,
   type Win11HostSummary,
 } from "@/bindings";
+import { DevEnvPanel } from "@/components/DevEnvPanel";
+import { PortsGovernancePanel } from "@/components/PortsGovernancePanel";
+import { ToolApprovalDialog } from "@/components/ToolApprovalDialog";
 import { WorkbenchSkeleton } from "@/components/WorkbenchSkeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -45,11 +53,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useKeelRuntime } from "@/keel-sdk/useKeelRuntime";
+import { isTauriRuntime, useKeelRuntime, useToolApproval } from "@/keel-sdk";
 import { cn } from "@/lib/utils";
 import "./App.css";
 
 type ConnectClientTab = "claude-code" | "cursor" | "powershell";
+type WorkbenchTab = "tools" | "ports" | "dev-env";
+
+interface DrillFeedbackNotice {
+  tone: "approved" | "blocked" | "info" | "error";
+  text: string;
+}
 
 const FALLBACK_HOST_SUMMARY: Win11HostSummary = {
   edition: "Windows 11 Pro",
@@ -112,11 +126,29 @@ function App() {
     runSelfTestPing,
   } = useKeelRuntime();
 
+  const {
+    pendingApprovals,
+    activeApproval,
+    sessionAllowlist,
+    isSubmitting: isApprovalSubmitting,
+    error: approvalError,
+    approveOnce,
+    approveForSession,
+    deny,
+    clearSessionAllowlist,
+    simulatePreviewApproval,
+  } = useToolApproval(snapshot);
+
   const [hostSummary, setHostSummary] = useState<Win11HostSummary | null>(null);
   const [isHostLoading, setIsHostLoading] = useState(true);
   const [echoDraft, setEchoDraft] = useState("hello-win11");
   const [activeClientTab, setActiveClientTab] =
     useState<ConnectClientTab>("claude-code");
+  const [activeWorkbenchTab, setActiveWorkbenchTab] =
+    useState<WorkbenchTab>("tools");
+  const [isDrilling, setIsDrilling] = useState(false);
+  const [drillFeedback, setDrillFeedback] =
+    useState<DrillFeedbackNotice | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const copyResetTimer = useRef<number | null>(null);
 
@@ -124,10 +156,7 @@ function App() {
     // Drop inline critical boot styles once React + Tailwind stylesheet take over
     document.getElementById("keel-critical-boot")?.remove();
 
-    const inTauri =
-      typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-
-    if (!inTauri) {
+    if (!isTauriRuntime()) {
       setHostSummary(FALLBACK_HOST_SUMMARY);
       setIsHostLoading(false);
       return;
@@ -200,6 +229,87 @@ function App() {
     }
   }
 
+  async function handleRunApprovalDrill(
+    port: number | null,
+    reason: string,
+    processName?: string,
+  ) {
+    setIsDrilling(true);
+    setDrillFeedback(null);
+
+    try {
+      if (!isTauriRuntime()) {
+        const previewRes = await simulatePreviewApproval({
+          port,
+          processName,
+          reason,
+        });
+        const targetLabel =
+          previewRes.process_names.join(", ") || "无活跃监听进程";
+        setDrillFeedback({
+          tone: "approved",
+          text: `演练放行通过（dry-run 未终止进程）· 端口 :${previewRes.port} · 目标 ${targetLabel}`,
+        });
+        return;
+      }
+
+      const res = await commands.drillKillPortApproval(port, reason);
+      if (res.status === "ok") {
+        const targetLabel =
+          res.data.process_names.join(", ") || "无活跃监听进程";
+        setDrillFeedback({
+          tone: "approved",
+          text: `演练放行通过（dry-run 未终止进程）· 端口 :${res.data.port} · 目标 ${targetLabel}`,
+        });
+      } else if (res.error.includes("User denied")) {
+        setDrillFeedback({
+          tone: "blocked",
+          text: `高危拦截生效 · 已人工拒绝${port ? `端口 :${port} 的 ` : " "}kill_port_process 调用`,
+        });
+      } else if (res.error.includes("timed out")) {
+        setDrillFeedback({
+          tone: "blocked",
+          text: "高危拦截生效 · 审批倒计时到期，系统已自动拒绝执行",
+        });
+      } else {
+        setDrillFeedback({
+          tone: "error",
+          text: `演练调用异常：${res.error}`,
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("User denied")) {
+        setDrillFeedback({
+          tone: "blocked",
+          text: `高危拦截生效 · 已人工拒绝${port ? `端口 :${port} 的 ` : " "}kill_port_process 调用`,
+        });
+      } else if (message.includes("timed out")) {
+        setDrillFeedback({
+          tone: "blocked",
+          text: "高危拦截生效 · 审批倒计时到期，系统已自动拒绝执行",
+        });
+      } else {
+        setDrillFeedback({
+          tone: "error",
+          text: `演练调用异常：${message}`,
+        });
+      }
+    } finally {
+      setIsDrilling(false);
+    }
+  }
+
+  async function handleRevokeSessionAllowlist() {
+    const ok = await clearSessionAllowlist();
+    if (ok) {
+      setDrillFeedback({
+        tone: "info",
+        text: "已撤销本会话全部免审白名单，后续高危工具调用将重新触发人工确认",
+      });
+    }
+  }
+
   const isBootstrapping = (isLoading && snapshot === null) || isHostLoading;
   if (isBootstrapping) {
     return <WorkbenchSkeleton />;
@@ -208,9 +318,20 @@ function App() {
   const serverStatus: KeelServerStatus = snapshot?.status ?? "starting";
   const activeSnippet = snippets[activeClientTab];
   const activeAlertMessage = snapshot?.error_message ?? pingError;
+  const toolCount = snapshot?.tools.length ?? 4;
 
   return (
     <TooltipProvider delayDuration={220}>
+      <ToolApprovalDialog
+        activeApproval={activeApproval}
+        pendingCount={pendingApprovals.length}
+        isSubmitting={isApprovalSubmitting}
+        error={approvalError}
+        onApproveOnce={approveOnce}
+        onApproveForSession={approveForSession}
+        onDeny={deny}
+      />
+
       <div className="flex h-dvh w-full flex-col overflow-clip bg-background text-foreground">
         {/* Top Workbench Command Bar */}
         <header className="shrink-0 border-b border-border bg-card/65 px-5 py-3">
@@ -256,7 +377,7 @@ function App() {
                   </Tooltip>
                 </div>
 
-                <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span className="select-none">本地端点</span>
                   <code className="truncate rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground select-all">
                     {endpointUrl}
@@ -291,36 +412,163 @@ function App() {
               </div>
             </div>
 
-            <form
-              className="flex shrink-0 items-center gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void runSelfTestPing(echoDraft);
-              }}
-            >
-              <Input
-                value={echoDraft}
-                onChange={(event) => setEchoDraft(event.currentTarget.value)}
-                placeholder="输入回显测试载荷..."
-                aria-label="keel_ping 回显测试载荷"
-                className="h-8 w-44 font-mono text-xs"
-              />
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {sessionAllowlist.length > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="font-mono tabular-nums"
+                      onClick={() => void handleRevokeSessionAllowlist()}
+                    >
+                      <KeyRoundIcon
+                        data-icon="inline-start"
+                        className="text-primary"
+                      />
+                      已免审 {sessionAllowlist.length} 项
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-sm">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium">
+                        当前会话免审白名单（点击立即撤销）：
+                      </span>
+                      {sessionAllowlist.map((entry) => (
+                        <code
+                          key={`${entry.session_scope}:${entry.tool_name}`}
+                          className="font-mono text-[11px]"
+                        >
+                          {entry.tool_name} @ {entry.session_scope}
+                        </code>
+                      ))}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    type="submit"
+                    type="button"
+                    variant="outline"
                     size="sm"
-                    disabled={isPinging || serverStatus !== "running"}
+                    disabled={isDrilling || serverStatus !== "running"}
+                    onClick={() =>
+                      void handleRunApprovalDrill(
+                        null,
+                        "桌面端人工确认网关演练 (dry-run)",
+                      )
+                    }
                   >
-                    <SendHorizontalIcon data-icon="inline-start" />
-                    {isPinging ? "握手中..." : "回环自检"}
+                    <ShieldAlertIcon
+                      data-icon="inline-start"
+                      className="text-(--keel-status-warn)"
+                    />
+                    {isDrilling ? "等待确认..." : "演练高危拦截"}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  通过真实 HTTP 客户端执行 initialize 与 keel_ping 工具调用
+                  通过本地回环发起 kill_port_process (dry_run: true) 调用，安全演练人工审批弹窗
                 </TooltipContent>
               </Tooltip>
-            </form>
+
+              <Separator
+                orientation="vertical"
+                className="hidden h-5 sm:block"
+              />
+
+              <form
+                className="flex shrink-0 items-center gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void runSelfTestPing(echoDraft);
+                }}
+              >
+                <Input
+                  value={echoDraft}
+                  onChange={(event) => setEchoDraft(event.currentTarget.value)}
+                  placeholder="输入回显测试载荷..."
+                  aria-label="keel_ping 回显测试载荷"
+                  className="h-8 w-40 font-mono text-xs"
+                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={isPinging || serverStatus !== "running"}
+                    >
+                      <SendHorizontalIcon data-icon="inline-start" />
+                      {isPinging ? "握手中..." : "回环自检"}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    通过真实 HTTP 客户端执行 initialize 与 keel_ping 工具调用
+                  </TooltipContent>
+                </Tooltip>
+              </form>
+            </div>
+          </div>
+
+          {/* Persistent polite live region for approval drill & allowlist status feedback */}
+          <div role="status" aria-live="polite" className="min-w-0">
+            {drillFeedback && (
+              <div
+                className={cn(
+                  "mt-2.5 flex items-center justify-between gap-2 rounded-lg border px-3 py-1.5 text-xs",
+                  drillFeedback.tone === "approved" &&
+                    "border-border bg-muted/50 text-foreground",
+                  drillFeedback.tone === "blocked" &&
+                    "border-destructive/35 bg-destructive/10 text-foreground",
+                  drillFeedback.tone === "info" &&
+                    "border-border bg-muted/40 text-muted-foreground",
+                  drillFeedback.tone === "error" &&
+                    "border-destructive/50 bg-destructive/15 text-destructive",
+                )}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  {drillFeedback.tone === "approved" && (
+                    <CheckCircle2Icon
+                      aria-hidden="true"
+                      className="size-3.5 shrink-0 text-(--keel-status-ok)"
+                    />
+                  )}
+                  {drillFeedback.tone === "blocked" && (
+                    <ShieldXIcon
+                      aria-hidden="true"
+                      className="size-3.5 shrink-0 text-destructive"
+                    />
+                  )}
+                  {drillFeedback.tone === "info" && (
+                    <ShieldCheckIcon
+                      aria-hidden="true"
+                      className="size-3.5 shrink-0 text-primary"
+                    />
+                  )}
+                  {drillFeedback.tone === "error" && (
+                    <AlertCircleIcon
+                      aria-hidden="true"
+                      className="size-3.5 shrink-0 text-destructive"
+                    />
+                  )}
+                  <span className="truncate font-mono text-xs">
+                    {drillFeedback.text}
+                  </span>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="关闭演练反馈提示"
+                  onClick={() => setDrillFeedback(null)}
+                >
+                  <XIcon />
+                </Button>
+              </div>
+            )}
           </div>
 
           {activeAlertMessage && (
@@ -338,7 +586,7 @@ function App() {
 
         {/* Main Two-Column shadcn/ui Workspace (strictly viewport-bounded, zero page scroll) */}
         <main className="grid min-h-0 flex-1 grid-cols-12 gap-4 p-4">
-          {/* Left Column: Client Integration Tabs + Registered Tools Table */}
+          {/* Left Column: Client Integration Tabs + Tabbed Host Workbench */}
           <div className="col-span-7 flex min-h-0 min-w-0 flex-col gap-4">
             <Card size="sm" className="shrink-0">
               <CardHeader className="border-b">
@@ -413,128 +661,187 @@ function App() {
               </CardContent>
             </Card>
 
-            <Card size="sm" className="flex min-h-0 flex-1 flex-col">
-              <CardHeader className="border-b">
-                <CardTitle>
-                  <h2 id="mcp-tools-heading">MCP 工具契约注册表</h2>
-                </CardTitle>
-                <CardDescription>
-                  keel_core 底座与 workbench 业务层解耦注册的工具元数据
-                </CardDescription>
-                <CardAction>
-                  <Badge
-                    variant="secondary"
-                    className="font-mono tabular-nums select-none"
-                  >
-                    {snapshot?.tools.length ?? 1} 项已注册
-                  </Badge>
-                </CardAction>
-              </CardHeader>
+            {/* Bottom-Left Tabbed Workbench Card */}
+            <Card size="sm" className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <Tabs
+                defaultValue="tools"
+                value={activeWorkbenchTab}
+                onValueChange={(value) =>
+                  setActiveWorkbenchTab(value as WorkbenchTab)
+                }
+                className="flex min-h-0 min-w-0 flex-1 flex-col gap-0"
+              >
+                <CardHeader className="shrink-0 border-b">
+                  <CardTitle className="min-w-0 truncate">
+                    <h2 id="workbench-host-heading">Windows 11 宿主治理工作台</h2>
+                  </CardTitle>
+                  <CardDescription className="min-w-0 truncate text-xs">
+                    MCP 契约元数据、Win32 活跃监听端口与本机开发工具链观测
+                  </CardDescription>
+                  <CardAction>
+                    <TabsList aria-label="宿主工作台视图切换">
+                      <TabsTrigger
+                        value="tools"
+                        className="px-2.5 text-xs tabular-nums"
+                      >
+                        工具契约 ({toolCount})
+                      </TabsTrigger>
+                      <TabsTrigger value="ports" className="px-2.5 text-xs">
+                        端口治理
+                      </TabsTrigger>
+                      <TabsTrigger value="dev-env" className="px-2.5 text-xs">
+                        本机环境
+                      </TabsTrigger>
+                    </TabsList>
+                  </CardAction>
+                </CardHeader>
 
-              <CardContent className="min-h-0 flex-1 p-0">
-                <ScrollArea className="h-full">
-                  <div
-                    role="region"
-                    aria-labelledby="mcp-tools-heading"
-                    tabIndex={0}
-                    className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                  >
-                    <Table className="table-fixed">
-                      <TableHeader className="sticky top-0 z-10 bg-card">
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead scope="col" className="w-30 pl-3 text-xs">
-                            工具名
-                          </TableHead>
-                          <TableHead scope="col" className="w-24 text-xs">
-                            归属层
-                          </TableHead>
-                          <TableHead scope="col" className="w-32 text-xs">
-                            安全策略
-                          </TableHead>
-                          <TableHead scope="col" className="pr-3 text-xs">
-                            功能说明
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {(snapshot?.tools ?? []).map((tool) => (
-                          <TableRow key={tool.name}>
-                            <TableHead
-                              scope="row"
-                              className="truncate pl-3 font-mono text-xs font-medium text-foreground"
-                            >
-                              {tool.name}
-                            </TableHead>
-                            <TableCell>
-                              <Badge
-                                variant="outline"
-                                className="font-mono text-[11px]"
+                <TabsContent
+                  value="tools"
+                  className="mt-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
+                >
+                  <CardContent className="min-h-0 min-w-0 flex-1 p-0">
+                    <ScrollArea className="h-full">
+                      <div
+                        role="region"
+                        aria-labelledby="workbench-host-heading"
+                        tabIndex={0}
+                        className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                      >
+                        <Table className="table-fixed">
+                          <TableHeader className="sticky top-0 z-10 bg-card">
+                            <TableRow className="hover:bg-transparent">
+                              <TableHead
+                                scope="col"
+                                className="w-36 pl-3 text-xs"
                               >
-                                {tool.source}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Badge
-                                    variant={
-                                      tool.safety === "safe"
-                                        ? "secondary"
-                                        : "destructive"
-                                    }
-                                    className="text-[11px]"
-                                  >
-                                    {tool.safety === "safe"
-                                      ? "Safe · 直接放行"
-                                      : "Confirm · 需审批"}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">
-                                  {tool.safety === "safe"
-                                    ? "只读或无副作用探针，框架直接执行并返回结构化结果"
-                                    : "高危操作将挂起调用通道并唤起系统托盘人工确认"}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TableCell>
-                            <TableCell className="truncate pr-3 text-xs text-muted-foreground">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span
-                                    tabIndex={0}
-                                    className="block truncate rounded-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                  >
-                                    {tool.description}
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="top"
-                                  aria-hidden="true"
-                                  className="max-w-sm"
+                                工具名
+                              </TableHead>
+                              <TableHead scope="col" className="w-24 text-xs">
+                                归属层
+                              </TableHead>
+                              <TableHead scope="col" className="w-32 text-xs">
+                                安全策略
+                              </TableHead>
+                              <TableHead scope="col" className="pr-3 text-xs">
+                                功能说明
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(snapshot?.tools ?? []).map((tool) => (
+                              <TableRow key={tool.name}>
+                                <TableHead
+                                  scope="row"
+                                  className="truncate pl-3 font-mono text-xs font-medium text-foreground"
                                 >
-                                  {tool.description}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </ScrollArea>
-              </CardContent>
+                                  {tool.name}
+                                </TableHead>
+                                <TableCell>
+                                  <Badge
+                                    variant="outline"
+                                    className="font-mono text-[11px]"
+                                  >
+                                    {tool.source}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge
+                                        variant={
+                                          tool.safety === "safe"
+                                            ? "secondary"
+                                            : "destructive"
+                                        }
+                                        className="text-[11px]"
+                                      >
+                                        {tool.safety === "safe"
+                                          ? "Safe · 直接放行"
+                                          : "Confirm · 需审批"}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                      {tool.safety === "safe"
+                                        ? "只读或无副作用探针，框架直接执行并返回结构化结果"
+                                        : "高危操作将挂起 MCP 调用通道并弹出桌面端人工确认网关"}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TableCell>
+                                <TableCell className="truncate pr-3 text-xs text-muted-foreground">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span
+                                        tabIndex={0}
+                                        className="block truncate rounded-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                      >
+                                        {tool.description}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      aria-hidden="true"
+                                      className="max-w-sm"
+                                    >
+                                      {tool.description}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </ScrollArea>
+                  </CardContent>
 
-              <CardFooter className="justify-between py-2 text-xs text-muted-foreground">
-                <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
-                  <LayersIcon
-                    aria-hidden="true"
-                    className="size-3.5 shrink-0 text-primary"
+                  <CardFooter className="shrink-0 justify-between py-2 text-xs text-muted-foreground">
+                    <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
+                      <LayersIcon
+                        aria-hidden="true"
+                        className="size-3.5 shrink-0 text-primary"
+                      />
+                      <span className="truncate">
+                        keel_core 与 workbench 单向解耦边界已锁定
+                      </span>
+                    </span>
+                    <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px]">
+                      <ShieldCheckIcon
+                        aria-hidden="true"
+                        className="size-3.5 text-(--keel-status-ok)"
+                      />
+                      ConfirmRequired 人工审批保护生效中
+                    </span>
+                  </CardFooter>
+                </TabsContent>
+
+                <TabsContent
+                  value="ports"
+                  forceMount
+                  className="mt-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
+                >
+                  <PortsGovernancePanel
+                    isActive={activeWorkbenchTab === "ports"}
+                    isServerRunning={serverStatus === "running"}
+                    isDrilling={isDrilling}
+                    onDrillPort={(port, processName) =>
+                      void handleRunApprovalDrill(
+                        port,
+                        `端口 :${port} (${processName}) 人工确认网关演练 (dry-run)`,
+                        processName,
+                      )
+                    }
                   />
-                  <span>workbench 业务隔离层已就绪</span>
-                </span>
-                <span className="shrink-0 font-mono text-[11px]">
-                  业务工具注册槽已就绪
-                </span>
-              </CardFooter>
+                </TabsContent>
+
+                <TabsContent
+                  value="dev-env"
+                  forceMount
+                  className="mt-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
+                >
+                  <DevEnvPanel isActive={activeWorkbenchTab === "dev-env"} />
+                </TabsContent>
+              </Tabs>
             </Card>
           </div>
 
