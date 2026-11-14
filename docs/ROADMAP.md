@@ -43,22 +43,22 @@
 
 ---
 
-### ⏳ Phase 2：本机环境工具与人机协同安全审批（Host Tools & Approval Gate）
+### ✅ Phase 2：本机环境工具与人机协同安全审批（Host Tools & Approval Gate）
 
 - **目标**：发挥桌面 GUI 应用相比纯命令行脚本的核心优势——**高危操作的实时可视化人工确认（Human-in-the-loop）**。
-- **关键规划**：
-  1. **本机开发环境工具集（`workbench`）**：
-     - `scan_dev_env`（`Safe`）：探测本机 Node.js、Rust、Python、Git、pnpm 等版本与可执行路径；
-     - `list_active_ports`（`Safe`）：采集本机监听端口、PID、进程名与命令行摘要；
-     - `kill_port_process`（`ConfirmRequired`）：终止指定占用端口的目标进程。
+- **已落地能力**：
+  1. **本机开发环境与端口治理工具集（`workbench`）**：
+     - `scan_dev_env`（`Safe`）：基于 `CREATE_NO_WINDOW` 并发探测本机 `git`、`node`、`pnpm`、`rustc`、`cargo`、`python`、`uv`、`pwsh`、`winget`、`wsl` 版本与路径（支持 UTF-16LE 输出解码与 `WindowsApps` 占位符过滤）；
+     - `list_active_ports`（`Safe`）：基于 Win32 `GetExtendedTcpTable`（IPv4/IPv6）与 `QueryFullProcessImageNameW` 毫秒级采集监听端口、PID 与完整进程路径；
+     - `kill_port_process`（`ConfirmRequired`）：内置 `expected_pid` TOCTOU 校验、系统与自身进程防误杀保护、Win32 `TerminateProcess` 终止及 `dry_run` 安全演练模式。
   2. **异步挂起权限拦截器（`keel_core`）**：
-     - 工具执行前校验 `ToolSafetyTier`：`Safe` 直接放行；`ConfirmRequired` 通过 `tokio::sync::oneshot` 挂起当前 MCP 请求协程，并经由 `tauri-specta` 事件向桌面端推送审批请求（含超时自动拒绝保护）。
-  3. **桌面审批交互（`keel-sdk` & UI）**：
-     - 提供 `useToolApproval()` Hook 与高危调用确认卡片，完整打通「外部客户端发起敏感工具调用 -> 桌面端弹出确认卡片 -> 用户授权放行 -> 唤醒协程执行并返回结构化结果」闭环。
+     - `KeelMcpServer::call_tool` 对 `ConfirmRequired` 工具通过 `tokio::sync::oneshot` 挂起请求，支持单次放行（`ApproveOnce`）、会话免审白名单（`ApproveForSession`）、拒绝拦截（`Deny`）、超时自动拒绝以及调用方取消（`RequestContext.ct`）即时回收与托盘主窗口唤醒聚焦。
+  3. **桌面审批交互与三合一宿主面板（`keel-sdk` & UI）**：
+     - 提供 `useToolApproval()` Hook、`ToolApprovalDialog` 实时倒计时确认弹窗，以及「工具契约 / 端口治理 / 本机环境」三标签工作台视图。
 
 ---
 
-### 📋 Phase 3：Windows 11 原生 ODR 集成与子进程托管（ODR & Process Host）
+### ⏳ Phase 3：Windows 11 原生 ODR 集成与子进程托管（ODR & Process Host）
 
 - **目标**：对接 Windows 11 原生智能体注册表生态，并解决桌面端托管外部三方 MCP 子进程时的控制台闪烁与残留痛点。
 - **关键规划**：
