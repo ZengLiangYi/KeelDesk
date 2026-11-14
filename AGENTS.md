@@ -4,6 +4,7 @@ Guidance for contributors and coding agents working in this repository.
 
 ## Platform & Architecture Boundary
 
+- **Brand Identity**: The project and product name is strictly **`KeelDesk`**. Never translate `KeelDesk` or `Keel` into Chinese in UI copy, ARIA labels, comments, or documentation.
 - **KeelDesk targets Windows 11 exclusively** (Build 22000+). Prefer authentic Windows 11 native integrations (`Win32` DWM, Registry, Job Objects, Windows ODR `odr.exe`) over lowest-common-denominator abstractions unless explicitly requested.
 - Maintain the strict one-way dependency boundary between the MCP runtime spine and the desktop workbench:
   - **Framework spine (`src-tauri/src/keel_core/`, `src/keel-sdk/`)**: Embedded `rmcp` + `axum` Streamable HTTP MCP server, tool safety registry (`Safe` / `ConfirmRequired`), telemetry events, and React hooks. **`keel_core` and `keel-sdk` must never import or depend on `workbench` business modules.**

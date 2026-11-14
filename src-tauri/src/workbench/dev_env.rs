@@ -330,10 +330,7 @@ pub(crate) fn select_preferred_executable_path(where_stdout: &str) -> Option<Str
         return None;
     }
 
-    let is_windows_apps = |p: &str| {
-        p.to_ascii_lowercase()
-            .contains(r"\microsoft\windowsapps\")
-    };
+    let is_windows_apps = |p: &str| p.to_ascii_lowercase().contains(r"\microsoft\windowsapps\");
     let has_ext = |p: &str, exts: &[&str]| {
         let lower = p.to_ascii_lowercase();
         exts.iter().any(|ext| lower.ends_with(ext))
@@ -521,7 +518,8 @@ mod tests {
 
     #[test]
     fn parses_wsl_utf16le_output_with_and_without_bom() {
-        let raw_wsl = "WSL version: 2.4.11.0\r\nKernel version: 5.15.167.4-1\r\nWSLg version: 1.0.65\r\n";
+        let raw_wsl =
+            "WSL version: 2.4.11.0\r\nKernel version: 5.15.167.4-1\r\nWSLg version: 1.0.65\r\n";
 
         let bomless_bytes = encode_utf16le(raw_wsl, false);
         assert_eq!(
@@ -529,7 +527,10 @@ mod tests {
             Some("WSL version: 2.4.11.0")
         );
 
-        let bom_bytes = encode_utf16le("\r\n  WSL 版本: 2.4.11.0  \r\n内核版本: 5.15.167.4-1\r\n", true);
+        let bom_bytes = encode_utf16le(
+            "\r\n  WSL 版本: 2.4.11.0  \r\n内核版本: 5.15.167.4-1\r\n",
+            true,
+        );
         assert_eq!(
             extract_version_line(&bom_bytes, &[]).as_deref(),
             Some("WSL 版本: 2.4.11.0")
@@ -538,7 +539,8 @@ mod tests {
 
     #[test]
     fn parses_utf8_multiline_cli_banners_and_stderr_fallback() {
-        let multiline_banner = b"\n\r\n  git version 2.48.1.windows.1  \r\nextra diagnostic line\r\n";
+        let multiline_banner =
+            b"\n\r\n  git version 2.48.1.windows.1  \r\nextra diagnostic line\r\n";
         assert_eq!(
             extract_version_line(multiline_banner, &[]).as_deref(),
             Some("git version 2.48.1.windows.1")
@@ -583,7 +585,10 @@ mod tests {
         assert!(report.path_entry_count > 0);
 
         let cargo_probe = &report.probes[0];
-        assert!(cargo_probe.installed, "cargo must be installed in test runner");
+        assert!(
+            cargo_probe.installed,
+            "cargo must be installed in test runner"
+        );
         assert!(
             cargo_probe
                 .version

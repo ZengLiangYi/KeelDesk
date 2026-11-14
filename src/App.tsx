@@ -293,7 +293,7 @@ function App() {
               <div className="flex min-w-0 flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-title font-semibold text-foreground">
-                    龙骨内嵌 MCP 服务工作台
+                    KeelDesk
                   </h1>
                   <StatusBadge tone={serverStatusToTone(serverStatus)}>
                     {serverStatusLabel(snapshot?.status)}

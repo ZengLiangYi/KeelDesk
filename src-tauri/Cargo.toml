@@ -1,9 +1,12 @@
 [package]
 name = "keeldesk"
 version = "0.1.0"
-description = "KeelDesk desktop shell"
-authors = ["ZengLiangYi"]
+description = "Native Windows 11 desktop MCP runtime spine and developer environment workbench"
+authors = ["Leon Zeng"]
 license = "MIT"
+repository = "https://github.com/ZengLiangYi/KeelDesk"
+homepage = "https://github.com/ZengLiangYi/KeelDesk"
+readme = "../README.md"
 edition = "2021"
 default-run = "keeldesk"
 autobins = false

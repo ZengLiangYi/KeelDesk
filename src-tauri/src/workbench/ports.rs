@@ -105,7 +105,9 @@ impl AsyncTool<KeelMcpServer> for ListActivePortsTool {
     ) -> Result<Self::Output, Self::Error> {
         tokio::task::spawn_blocking(move || collect_active_ports(&param))
             .await
-            .map_err(|err| McpError::internal_error(format!("Port scan task panicked: {err}"), None))?
+            .map_err(|err| {
+                McpError::internal_error(format!("Port scan task panicked: {err}"), None)
+            })?
             .map_err(|msg| McpError::internal_error(msg, None))
     }
 }
@@ -447,8 +449,12 @@ pub fn collect_active_ports(params: &ListActivePortsParams) -> Result<ActivePort
     }
 
     entries.sort_by(|a, b| {
-        (&a.port, &a.protocol, &a.local_addr, &a.pid)
-            .cmp(&(&b.port, &b.protocol, &b.local_addr, &b.pid))
+        (&a.port, &a.protocol, &a.local_addr, &a.pid).cmp(&(
+            &b.port,
+            &b.protocol,
+            &b.local_addr,
+            &b.pid,
+        ))
     });
     entries.dedup_by(|a, b| {
         a.port == b.port

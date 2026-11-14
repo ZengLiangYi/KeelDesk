@@ -16,8 +16,7 @@ pub fn apply_win11_window_chrome(
     window: &tauri::WebviewWindow,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use windows::Win32::Graphics::Dwm::{
-        DwmSetWindowAttribute, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR,
-        DWMWA_USE_IMMERSIVE_DARK_MODE,
+        DwmSetWindowAttribute, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE,
     };
 
     let hwnd = window.hwnd()?;

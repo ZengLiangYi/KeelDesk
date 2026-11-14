@@ -146,23 +146,21 @@ impl KeelRuntime {
                 format!("/{}", config.mcp_path)
             };
 
-            let app = Router::new()
-                .nest_service(&mcp_path, mcp_service)
-                .route(
-                    "/healthz",
-                    get(move || {
-                        let snap = health_shared.snapshot();
-                        async move {
-                            AxumJson(json!({
-                                "ok": snap.status == KeelServerStatus::Running,
-                                "server": snap.server_name,
-                                "version": snap.server_version,
-                                "endpoint": snap.endpoint_url,
-                                "total_calls": snap.total_calls,
-                            }))
-                        }
-                    }),
-                );
+            let app = Router::new().nest_service(&mcp_path, mcp_service).route(
+                "/healthz",
+                get(move || {
+                    let snap = health_shared.snapshot();
+                    async move {
+                        AxumJson(json!({
+                            "ok": snap.status == KeelServerStatus::Running,
+                            "server": snap.server_name,
+                            "version": snap.server_version,
+                            "endpoint": snap.endpoint_url,
+                            "total_calls": snap.total_calls,
+                        }))
+                    }
+                }),
+            );
 
             task_shared.mark_running(actual_port);
             task_ready.notify_waiters();
@@ -394,9 +392,7 @@ mod tests {
         target: String,
     }
 
-    #[derive(
-        Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema, PartialEq, Eq,
-    )]
+    #[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema, PartialEq, Eq)]
     struct GuardedActionOutput {
         executed: bool,
         target: String,
@@ -462,7 +458,7 @@ mod tests {
         let mut registry = KeelToolRegistry::new();
         registry.register_async_tool::<GuardedActionTool>(
             "test_workbench",
-             super::super::types::ToolSafetyTier::ConfirmRequired,
+            super::super::types::ToolSafetyTier::ConfirmRequired,
         );
         registry.register_sync_tool::<SafeSyncProbeTool>(
             "test_workbench",
@@ -486,8 +482,7 @@ mod tests {
             StreamableHttpClientTransportConfig::with_uri(endpoint_url.to_string()),
         );
 
-        ()
-            .serve(transport)
+        ().serve(transport)
             .await
             .expect("MCP initialize handshake should succeed")
     }
@@ -667,7 +662,10 @@ mod tests {
         let mid_snap = runtime.snapshot();
         assert!(mid_snap.pending_approvals.is_empty());
         assert_eq!(mid_snap.session_allowlist.len(), 1);
-        assert_eq!(mid_snap.session_allowlist[0].tool_name, "guarded_test_action");
+        assert_eq!(
+            mid_snap.session_allowlist[0].tool_name,
+            "guarded_test_action"
+        );
 
         // Second call on the same MCP client session must succeed immediately without prompting.
         let second_res = client
@@ -680,7 +678,10 @@ mod tests {
         assert_ne!(second_res.is_error, Some(true));
         let after_second = runtime.snapshot();
         assert!(after_second.pending_approvals.is_empty());
-        assert_eq!(after_second.recent_calls[0].summary, "OK · session allowlisted");
+        assert_eq!(
+            after_second.recent_calls[0].summary,
+            "OK · session allowlisted"
+        );
 
         // Clearing the allowlist revokes session bypass so the next call requires approval again.
         let cleared = runtime.clear_session_allowlist();
@@ -699,7 +700,10 @@ mod tests {
         let rearmed_pending = wait_for_pending_approval(&runtime).await;
         assert_eq!(rearmed_pending.tool_name, "guarded_test_action");
         runtime
-            .resolve_tool_approval(&rearmed_pending.request_id, ToolApprovalDecision::ApproveOnce)
+            .resolve_tool_approval(
+                &rearmed_pending.request_id,
+                ToolApprovalDecision::ApproveOnce,
+            )
             .expect("re-armed approval should resolve");
 
         let third_res = third_call
@@ -728,7 +732,8 @@ mod tests {
 
     #[tokio::test]
     async fn unapproved_confirm_required_tool_times_out_and_cleans_up_pending() {
-        let config = KeelConfig::ephemeral_for_test().with_approval_timeout(Duration::from_millis(120));
+        let config =
+            KeelConfig::ephemeral_for_test().with_approval_timeout(Duration::from_millis(120));
         let runtime = KeelRuntime::start_headless(config, registry_with_guarded_tool());
         let snap = runtime.wait_until_ready(Duration::from_secs(3)).await;
         let client = connect_test_mcp_client(&snap.endpoint_url).await;
@@ -754,7 +759,10 @@ mod tests {
         assert!(after.pending_approvals.is_empty());
         assert_eq!(after.recent_calls.len(), 1);
         assert!(!after.recent_calls[0].succeeded);
-        assert_eq!(after.recent_calls[0].summary, "Blocked · approval timed out");
+        assert_eq!(
+            after.recent_calls[0].summary,
+            "Blocked · approval timed out"
+        );
 
         assert!(runtime
             .resolve_tool_approval("apr-1", ToolApprovalDecision::ApproveOnce)
@@ -924,7 +932,10 @@ mod tests {
         assert_eq!(after.total_calls, 1);
         assert_eq!(after.recent_calls.len(), 1);
         assert!(!after.recent_calls[0].succeeded);
-        assert_eq!(after.recent_calls[0].summary, "Blocked · cancelled by caller");
+        assert_eq!(
+            after.recent_calls[0].summary,
+            "Blocked · cancelled by caller"
+        );
 
         runtime.shutdown();
     }

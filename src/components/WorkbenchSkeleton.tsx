@@ -11,7 +11,7 @@ export function WorkbenchSkeleton() {
   return (
     <div
       role="progressbar"
-      aria-label="正在初始化龙骨工作台运行时快照"
+      aria-label="正在初始化 KeelDesk 运行时快照"
       aria-busy="true"
       className="flex h-dvh w-full flex-col overflow-clip bg-background text-foreground"
     >
