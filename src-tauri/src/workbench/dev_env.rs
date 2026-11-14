@@ -250,9 +250,10 @@ pub(crate) fn decode_cli_output(bytes: &[u8]) -> String {
 }
 
 fn decode_utf16le_slice(bytes: &[u8]) -> String {
-    let units: Vec<u16> = bytes
-        .chunks_exact(2)
-        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+    let (pairs, _) = bytes.as_chunks::<2>();
+    let units: Vec<u16> = pairs
+        .iter()
+        .map(|&pair| u16::from_le_bytes(pair))
         .take_while(|&unit| unit != 0)
         .collect();
     String::from_utf16_lossy(&units)
@@ -266,23 +267,23 @@ fn looks_like_utf16le(bytes: &[u8]) -> bool {
     }
 
     let sample = &bytes[..bytes.len().min(128)];
-    let pair_count = sample.len() / 2;
-    if pair_count == 0 {
+    let (pairs, _) = sample.as_chunks::<2>();
+    if pairs.is_empty() {
         return false;
     }
 
     let mut even_zeros = 0usize;
     let mut odd_zeros = 0usize;
-    for chunk in sample.chunks_exact(2) {
-        if chunk[0] == 0 {
+    for &[lo, hi] in pairs {
+        if lo == 0 {
             even_zeros += 1;
         }
-        if chunk[1] == 0 {
+        if hi == 0 {
             odd_zeros += 1;
         }
     }
 
-    odd_zeros > even_zeros && odd_zeros.saturating_mul(4) >= pair_count
+    odd_zeros > even_zeros && odd_zeros.saturating_mul(4) >= pairs.len()
 }
 
 /// Extract the concise first non-empty version line from stdout (falling back to stderr).

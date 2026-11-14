@@ -5,7 +5,6 @@ description = "Native Windows 11 desktop MCP runtime spine and developer environ
 authors = ["Leon Zeng"]
 license = "MIT"
 repository = "https://github.com/ZengLiangYi/KeelDesk"
-homepage = "https://github.com/ZengLiangYi/KeelDesk"
 readme = "../README.md"
 edition = "2021"
 default-run = "keeldesk"
