@@ -1,11 +1,5 @@
 /* Windows 11 workbench enhancements paired with shadcn/ui (radix-nova) */
 
-:root {
-  --keel-status-ok: oklch(0.75 0.165 154);
-  --keel-status-warn: oklch(0.8 0.15 78);
-  --keel-status-err: oklch(0.69 0.19 24);
-}
-
 /* Keep scroll chaining contained inside nested Radix / code / table scrollports */
 [data-slot="scroll-area-viewport"],
 [data-slot="table-container"],
@@ -25,6 +19,36 @@
   background: transparent;
   block-size: 0;
   border-block-end: 2px solid var(--primary);
+}
+
+/* Windows High Contrast (forced-colors) resilience rules */
+@media (forced-colors: active) {
+  [data-slot="card"],
+  [data-slot="badge"] {
+    border: 1px solid ButtonBorder;
+  }
+
+  [data-slot="status-dot"] {
+    background-color: CanvasText;
+    outline: 1px solid ButtonBorder;
+  }
+
+  [data-slot="tabs-list"][data-variant="line"]
+    [role="tab"][aria-selected="true"]::after {
+    border-block-end-color: Highlight;
+  }
+}
+
+/* Reduced motion: clamp transitions and animations cleanly */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Legacy fallback when standard scrollbar-color is unavailable */
