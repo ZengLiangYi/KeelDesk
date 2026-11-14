@@ -9,6 +9,35 @@ pub enum ToolSafetyTier {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
+pub enum ToolApprovalDecision {
+    ApproveOnce,
+    ApproveForSession,
+    Deny,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct PendingToolApproval {
+    pub request_id: String,
+    pub tool_name: String,
+    pub tool_source: String,
+    pub description: String,
+    pub arguments_json: String,
+    pub caller_hint: Option<String>,
+    pub session_scope: String,
+    pub requested_at_iso: String,
+    pub expires_at_iso: String,
+    pub timeout_secs: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct SessionAllowlistEntry {
+    pub session_scope: String,
+    pub tool_name: String,
+    pub granted_at_iso: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
 pub enum KeelServerStatus {
     Starting,
     Running,
@@ -47,6 +76,8 @@ pub struct KeelRuntimeSnapshot {
     pub total_calls: u32,
     pub tools: Vec<KeelToolDescriptor>,
     pub recent_calls: Vec<ToolCallLogEntry>,
+    pub pending_approvals: Vec<PendingToolApproval>,
+    pub session_allowlist: Vec<SessionAllowlistEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, schemars::JsonSchema)]
@@ -69,3 +100,6 @@ pub struct KeelPingSelfTestResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, tauri_specta::Event)]
 pub struct KeelRuntimeUpdatedEvent(pub KeelRuntimeSnapshot);
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, tauri_specta::Event)]
+pub struct ToolApprovalRequestedEvent(pub PendingToolApproval);

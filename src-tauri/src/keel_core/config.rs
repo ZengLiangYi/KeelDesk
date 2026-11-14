@@ -1,7 +1,11 @@
-use std::net::{Ipv4Addr, SocketAddr};
+use std::{
+    net::{Ipv4Addr, SocketAddr},
+    time::Duration,
+};
 
 pub const DEFAULT_KEEL_MCP_PORT: u16 = 19527;
 pub const DEFAULT_KEEL_MCP_PATH: &str = "/mcp";
+pub const DEFAULT_APPROVAL_TIMEOUT_SECS: u64 = 60;
 pub const KEEL_MCP_PORT_ENV: &str = "KEELDESK_MCP_PORT";
 
 #[derive(Debug, Clone)]
@@ -13,6 +17,7 @@ pub struct KeelConfig {
     pub server_version: String,
     pub allowed_hosts: Vec<String>,
     pub allowed_origins: Vec<String>,
+    pub approval_timeout: Duration,
 }
 
 impl Default for KeelConfig {
@@ -44,6 +49,7 @@ impl Default for KeelConfig {
                 "http://tauri.localhost".to_string(),
                 "https://tauri.localhost".to_string(),
             ],
+            approval_timeout: Duration::from_secs(DEFAULT_APPROVAL_TIMEOUT_SECS),
         }
     }
 }
@@ -55,6 +61,11 @@ impl KeelConfig {
             port: 0,
             ..Self::default()
         }
+    }
+
+    pub fn with_approval_timeout(mut self, timeout: Duration) -> Self {
+        self.approval_timeout = timeout;
+        self
     }
 
     pub fn socket_addr(&self) -> SocketAddr {

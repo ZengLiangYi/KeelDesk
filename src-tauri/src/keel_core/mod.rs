@@ -5,9 +5,10 @@ pub mod runtime;
 pub mod types;
 
 pub use config::KeelConfig;
-pub use mcp_server::{KeelMcpServer, KeelToolRegistry};
+pub use mcp_server::{ApprovalNotifier, KeelMcpServer, KeelToolRegistry};
 pub use runtime::KeelRuntime;
 pub use types::{
     KeelPingPayload, KeelPingSelfTestResult, KeelRuntimeSnapshot, KeelRuntimeUpdatedEvent,
-    KeelServerStatus, KeelToolDescriptor, ToolCallLogEntry, ToolSafetyTier,
+    KeelServerStatus, KeelToolDescriptor, PendingToolApproval, SessionAllowlistEntry,
+    ToolApprovalDecision, ToolApprovalRequestedEvent, ToolCallLogEntry, ToolSafetyTier,
 };
