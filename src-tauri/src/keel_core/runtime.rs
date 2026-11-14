@@ -827,4 +827,105 @@ mod tests {
         let _ = client.cancel().await;
         runtime.shutdown();
     }
+
+    #[tokio::test]
+    async fn client_cancelled_confirm_required_tool_cleans_up_pending_approval_promptly() {
+        let runtime = KeelRuntime::start_headless(
+            KeelConfig::ephemeral_for_test().with_approval_timeout(Duration::from_secs(60)),
+            registry_with_guarded_tool(),
+        );
+        let snap = runtime.wait_until_ready(Duration::from_secs(3)).await;
+        assert_eq!(snap.status, KeelServerStatus::Running);
+
+        let http_client = reqwest::Client::builder()
+            .no_proxy()
+            .user_agent("coder-cancel-test/1.0")
+            .build()
+            .expect("reqwest client should build");
+
+        let init_res = http_client
+            .post(&snap.endpoint_url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .body(r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"cancel-test","version":"1.0.0"}}}"#)
+            .send()
+            .await
+            .expect("initialize request should succeed");
+        let session_id = init_res
+            .headers()
+            .get("mcp-session-id")
+            .and_then(|v| v.to_str().ok())
+            .expect("mcp-session-id header must be present")
+            .to_string();
+        let _ = init_res.text().await;
+
+        let _ = http_client
+            .post(&snap.endpoint_url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .header("Mcp-Session-Id", &session_id)
+            .body(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#)
+            .send()
+            .await
+            .expect("notifications/initialized should succeed");
+
+        let call_http = http_client.clone();
+        let call_url = snap.endpoint_url.clone();
+        let call_sid = session_id.clone();
+        let in_flight_post = tokio::spawn(async move {
+            call_http
+                .post(&call_url)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json, text/event-stream")
+                .header("Mcp-Session-Id", &call_sid)
+                .body(r#"{"jsonrpc":"2.0","id":42,"method":"tools/call","params":{"name":"guarded_test_action","arguments":{"target":"cancel-me"}}}"#)
+                .timeout(Duration::from_millis(250))
+                .send()
+                .await
+        });
+
+        let pending = wait_for_pending_approval(&runtime).await;
+        assert_eq!(pending.tool_name, "guarded_test_action");
+        assert_eq!(runtime.snapshot().pending_approvals.len(), 1);
+
+        // Simulate external agent aborting its HTTP call and emitting MCP notifications/cancelled.
+        in_flight_post.abort();
+        let cancel_res = http_client
+            .post(&snap.endpoint_url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .header("Mcp-Session-Id", &session_id)
+            .body(r#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":42,"reason":"external agent timeout"}}"#)
+            .send()
+            .await
+            .expect("notifications/cancelled should succeed");
+        assert!(cancel_res.status().is_success());
+
+        // PendingApprovalDropGuard must immediately remove apr-1 without waiting for the 60s timeout.
+        let mut cleaned_up = false;
+        for _ in 0..80 {
+            if runtime.snapshot().pending_approvals.is_empty() {
+                cleaned_up = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(15)).await;
+        }
+        assert!(
+            cleaned_up,
+            "PendingApprovalDropGuard must clean up pending approval promptly on cancellation"
+        );
+
+        // Resolving a cancelled approval request afterwards must fail safely rather than executing.
+        assert!(runtime
+            .resolve_tool_approval(&pending.request_id, ToolApprovalDecision::ApproveOnce)
+            .is_err());
+
+        let after = runtime.snapshot();
+        assert_eq!(after.total_calls, 1);
+        assert_eq!(after.recent_calls.len(), 1);
+        assert!(!after.recent_calls[0].succeeded);
+        assert_eq!(after.recent_calls[0].summary, "Blocked · cancelled by caller");
+
+        runtime.shutdown();
+    }
 }

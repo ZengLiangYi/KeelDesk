@@ -10,6 +10,7 @@ import { commands, type ActivePortReport } from "@/bindings";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -241,7 +242,7 @@ export function PortsGovernancePanel({
       )}
 
       {/* Bounded Scrollable Ports Table */}
-      <div className="min-h-0 min-w-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {isLoading && report === null ? (
           <div className="flex flex-col gap-2 p-3">
             <Skeleton className="h-7 w-full" />
@@ -390,7 +391,7 @@ export function PortsGovernancePanel({
       </div>
 
       {/* Footer Strip */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+      <CardFooter className="shrink-0 justify-between gap-2 py-2 text-xs text-muted-foreground">
         <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
           <NetworkIcon
             aria-hidden="true"
@@ -403,7 +404,7 @@ export function PortsGovernancePanel({
         <span className="shrink-0 font-mono text-[11px] tabular-nums">
           采样 {formatCaptureHms(report?.captured_at_iso)}
         </span>
-      </div>
+      </CardFooter>
     </div>
   );
 }

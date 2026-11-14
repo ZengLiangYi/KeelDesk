@@ -700,7 +700,7 @@ function App() {
                   value="tools"
                   className="mt-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
                 >
-                  <CardContent className="min-h-0 min-w-0 flex-1 p-0">
+                  <CardContent className="min-h-0 min-w-0 flex-1 overflow-hidden p-0">
                     <ScrollArea className="h-full">
                       <div
                         role="region"
@@ -909,7 +909,7 @@ function App() {
                   </Button>
                 </div>
               ) : (
-                <ScrollArea className="min-h-0 flex-1">
+                <ScrollArea className="min-h-0 flex-1 overflow-hidden">
                   <div className="divide-y divide-border">
                     {snapshot?.recent_calls.map((entry) => (
                       <div

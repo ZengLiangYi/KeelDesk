@@ -581,6 +581,13 @@ enum ApprovalTrace {
     SessionAllowlisted,
 }
 
+#[derive(Debug)]
+enum ApprovalWaitOutcome {
+    Decided(Result<ToolApprovalDecision, oneshot::error::RecvError>),
+    Cancelled,
+    TimedOut,
+}
+
 impl ServerHandler for KeelMcpServer {
     fn get_info(&self) -> ServerConfig {
         let server_info = Implementation::new(
@@ -624,6 +631,22 @@ impl ServerHandler for KeelMcpServer {
         let session_scope = extract_session_scope(&context);
         let started = Instant::now();
 
+        if context.ct.is_cancelled() {
+            let duration_ms = started.elapsed().as_millis().min(u32::MAX as u128) as u32;
+            self.shared.record_tool_call(
+                tool_name.clone(),
+                duration_ms,
+                false,
+                "Blocked · cancelled by caller".to_string(),
+                caller_hint,
+            );
+            return Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Request for tool '{}' was cancelled before execution.",
+                tool_name
+            ))])
+            .into());
+        }
+
         let mut approval_trace = ApprovalTrace::NotRequired;
         if let Some(descriptor) = self.shared.tool_descriptor(&tool_name).cloned() {
             if descriptor.safety == ToolSafetyTier::ConfirmRequired {
@@ -633,7 +656,8 @@ impl ServerHandler for KeelMcpServer {
                 {
                     approval_trace = ApprovalTrace::SessionAllowlisted;
                 } else {
-                    let decision = {
+                    let cancel_token = context.ct.clone();
+                    let wait_outcome = {
                         let (pending, rx) = self.shared.enqueue_tool_approval(
                             &tool_name,
                             &descriptor.source,
@@ -646,17 +670,28 @@ impl ServerHandler for KeelMcpServer {
                             shared: Arc::clone(&self.shared),
                             request_id: pending.request_id,
                         };
-                        tokio::time::timeout(self.shared.config.approval_timeout, rx).await
+                        tokio::select! {
+                            biased;
+                            _ = cancel_token.cancelled() => ApprovalWaitOutcome::Cancelled,
+                            timed = tokio::time::timeout(self.shared.config.approval_timeout, rx) => {
+                                match timed {
+                                    Ok(decision) => ApprovalWaitOutcome::Decided(decision),
+                                    Err(_) => ApprovalWaitOutcome::TimedOut,
+                                }
+                            }
+                        }
                     };
 
-                    match decision {
-                        Ok(Ok(ToolApprovalDecision::ApproveOnce)) => {
+                    match wait_outcome {
+                        ApprovalWaitOutcome::Decided(Ok(ToolApprovalDecision::ApproveOnce)) => {
                             approval_trace = ApprovalTrace::ApprovedOnce;
                         }
-                        Ok(Ok(ToolApprovalDecision::ApproveForSession)) => {
+                        ApprovalWaitOutcome::Decided(Ok(
+                            ToolApprovalDecision::ApproveForSession,
+                        )) => {
                             approval_trace = ApprovalTrace::ApprovedForSession;
                         }
-                        Ok(Ok(ToolApprovalDecision::Deny)) => {
+                        ApprovalWaitOutcome::Decided(Ok(ToolApprovalDecision::Deny)) => {
                             let duration_ms =
                                 started.elapsed().as_millis().min(u32::MAX as u128) as u32;
                             self.shared.record_tool_call(
@@ -672,7 +707,23 @@ impl ServerHandler for KeelMcpServer {
                             ))])
                             .into());
                         }
-                        Ok(Err(_)) | Err(_) => {
+                        ApprovalWaitOutcome::Cancelled => {
+                            let duration_ms =
+                                started.elapsed().as_millis().min(u32::MAX as u128) as u32;
+                            self.shared.record_tool_call(
+                                tool_name.clone(),
+                                duration_ms,
+                                false,
+                                "Blocked · cancelled by caller".to_string(),
+                                caller_hint,
+                            );
+                            return Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                                "Cancelled while waiting for desktop user approval for tool '{}'.",
+                                tool_name
+                            ))])
+                            .into());
+                        }
+                        ApprovalWaitOutcome::Decided(Err(_)) | ApprovalWaitOutcome::TimedOut => {
                             let duration_ms =
                                 started.elapsed().as_millis().min(u32::MAX as u128) as u32;
                             self.shared.record_tool_call(
@@ -691,6 +742,22 @@ impl ServerHandler for KeelMcpServer {
                     }
                 }
             }
+        }
+
+        if context.ct.is_cancelled() {
+            let duration_ms = started.elapsed().as_millis().min(u32::MAX as u128) as u32;
+            self.shared.record_tool_call(
+                tool_name.clone(),
+                duration_ms,
+                false,
+                "Blocked · cancelled by caller".to_string(),
+                caller_hint,
+            );
+            return Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Request for tool '{}' was cancelled before execution.",
+                tool_name
+            ))])
+            .into());
         }
 
         let outcome = self
