@@ -1,9 +1,8 @@
 /* Windows 11 workbench enhancements paired with shadcn/ui (radix-nova) */
 
-/* Keep scroll chaining contained inside nested Radix / code / table scrollports */
+/* Keep scroll chaining contained inside nested Radix / table scrollports */
 [data-slot="scroll-area-viewport"],
-[data-slot="table-container"],
-.keel-code-scroll {
+[data-slot="table-container"] {
   overscroll-behavior: contain;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
@@ -53,19 +52,19 @@
 
 /* Legacy fallback when standard scrollbar-color is unavailable */
 @supports not (scrollbar-color: auto) {
-  .keel-code-scroll::-webkit-scrollbar,
+  [data-slot="scroll-area-viewport"]::-webkit-scrollbar,
   [data-slot="table-container"]::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
 
-  .keel-code-scroll::-webkit-scrollbar-thumb,
+  [data-slot="scroll-area-viewport"]::-webkit-scrollbar-thumb,
   [data-slot="table-container"]::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb);
     border-radius: 999px;
   }
 
-  .keel-code-scroll::-webkit-scrollbar-track,
+  [data-slot="scroll-area-viewport"]::-webkit-scrollbar-track,
   [data-slot="table-container"]::-webkit-scrollbar-track {
     background: var(--scrollbar-track);
   }

@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIcon,
   AlertCircleIcon,
   CheckCircle2Icon,
-  CheckIcon,
-  CopyIcon,
   KeyRoundIcon,
   LayersIcon,
   SendHorizontalIcon,
@@ -23,6 +21,18 @@ import { DevEnvPanel } from "@/components/DevEnvPanel";
 import { PortsGovernancePanel } from "@/components/PortsGovernancePanel";
 import { ToolApprovalDialog } from "@/components/ToolApprovalDialog";
 import { WorkbenchSkeleton } from "@/components/WorkbenchSkeleton";
+import {
+  CodeWell,
+  CopyButton,
+  EmptyState,
+  MetricPill,
+  SafetyTierBadge,
+  StatusBadge,
+  TruncatedText,
+  formatTimeHms,
+  serverStatusLabel,
+  serverStatusToTone,
+} from "@/components/ds";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -74,48 +84,6 @@ const FALLBACK_HOST_SUMMARY: Win11HostSummary = {
   is_windows_11: true,
 };
 
-function statusLabel(status: KeelServerStatus | undefined): string {
-  switch (status) {
-    case "running":
-      return "运行中";
-    case "starting":
-      return "启动中";
-    case "error":
-      return "绑定异常";
-    case "stopped":
-      return "已停止";
-    default:
-      return "初始化";
-  }
-}
-
-function formatTimeHms(iso: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) {
-    return "--:--:--";
-  }
-  return parsed.toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function StatusDot({ status }: { status: KeelServerStatus }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "size-2 shrink-0 rounded-full",
-        status === "running" && "bg-(--keel-status-ok)",
-        status === "starting" && "bg-(--keel-status-warn)",
-        (status === "error" || status === "stopped") && "bg-(--keel-status-err)",
-      )}
-    />
-  );
-}
-
 function App() {
   const {
     snapshot,
@@ -149,8 +117,6 @@ function App() {
   const [isDrilling, setIsDrilling] = useState(false);
   const [drillFeedback, setDrillFeedback] =
     useState<DrillFeedbackNotice | null>(null);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const copyResetTimer = useRef<number | null>(null);
 
   useEffect(() => {
     // Drop inline critical boot styles once React + Tailwind stylesheet take over
@@ -186,14 +152,6 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (copyResetTimer.current !== null) {
-        window.clearTimeout(copyResetTimer.current);
-      }
-    };
-  }, []);
-
   const endpointUrl = snapshot?.endpoint_url ?? "http://127.0.0.1:19527/mcp";
   const healthzUrl = useMemo(
     () => endpointUrl.replace(/\/mcp$/, "/healthz"),
@@ -212,22 +170,6 @@ function App() {
     }),
     [endpointUrl, healthzUrl],
   );
-
-  async function copyText(key: string, value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopiedKey(key);
-      if (copyResetTimer.current !== null) {
-        window.clearTimeout(copyResetTimer.current);
-      }
-      copyResetTimer.current = window.setTimeout(() => {
-        setCopiedKey(null);
-        copyResetTimer.current = null;
-      }, 1600);
-    } catch {
-      // Clipboard unavailable in restricted context
-    }
-  }
 
   async function handleRunApprovalDrill(
     port: number | null,
@@ -334,37 +276,34 @@ function App() {
 
       <div className="flex h-dvh w-full flex-col overflow-clip bg-background text-foreground">
         {/* Top Workbench Command Bar */}
-        <header className="shrink-0 border-b border-border bg-card/65 px-5 py-3">
+        <header className="shrink-0 border-b border-border-subtle bg-surface-panel px-4 py-2.5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 ring-1 ring-primary/30">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-primary-border bg-primary-subtle">
                 <img
                   src="/logo.svg"
                   alt=""
-                  width={20}
-                  height={20}
+                  width={18}
+                  height={18}
                   aria-hidden="true"
-                  className="size-5 object-contain dark:invert"
+                  className="size-4.5 object-contain dark:invert"
                 />
               </div>
 
               <div className="flex min-w-0 flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-sm font-semibold tracking-tight text-foreground">
+                  <h1 className="text-title font-semibold text-foreground">
                     龙骨内嵌 MCP 服务工作台
                   </h1>
-                  <Badge
-                    variant="secondary"
-                    className="gap-1.5 font-normal select-none"
-                  >
-                    <StatusDot status={serverStatus} />
-                    {statusLabel(snapshot?.status)}
-                  </Badge>
+                  <StatusBadge tone={serverStatusToTone(serverStatus)}>
+                    {serverStatusLabel(snapshot?.status)}
+                  </StatusBadge>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Badge
                         variant="outline"
-                        className="gap-1 font-normal text-muted-foreground select-none"
+                        tabIndex={0}
+                        className="gap-1 font-normal text-muted-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50"
                       >
                         <ShieldCheckIcon aria-hidden="true" />
                         Loopback 防重绑定
@@ -377,37 +316,17 @@ function App() {
                   </Tooltip>
                 </div>
 
-                <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 text-caption text-muted-foreground">
                   <span className="select-none">本地端点</span>
-                  <code className="truncate rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground select-all">
+                  <code className="truncate rounded-xs border border-border-subtle bg-surface-sunken px-1.5 py-0.5 font-mono text-caption text-foreground select-all">
                     {endpointUrl}
                   </code>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        aria-label={
-                          copiedKey === "endpoint"
-                            ? "已复制 MCP 端点地址"
-                            : "复制 MCP 端点地址"
-                        }
-                        onClick={() => void copyText("endpoint", endpointUrl)}
-                      >
-                        {copiedKey === "endpoint" ? (
-                          <CheckIcon className="text-(--keel-status-ok)" />
-                        ) : (
-                          <CopyIcon />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      {copiedKey === "endpoint"
-                        ? "已复制端点 URL"
-                        : "复制 MCP 端点 URL"}
-                    </TooltipContent>
-                  </Tooltip>
+                  <CopyButton
+                    value={endpointUrl}
+                    label="复制 MCP 端点地址"
+                    copiedLabel="已复制端点 URL"
+                    side="bottom"
+                  />
                 </div>
               </div>
             </div>
@@ -438,7 +357,7 @@ function App() {
                       {sessionAllowlist.map((entry) => (
                         <code
                           key={`${entry.session_scope}:${entry.tool_name}`}
-                          className="font-mono text-[11px]"
+                          className="font-mono text-micro"
                         >
                           {entry.tool_name} @ {entry.session_scope}
                         </code>
@@ -464,7 +383,7 @@ function App() {
                   >
                     <ShieldAlertIcon
                       data-icon="inline-start"
-                      className="text-(--keel-status-warn)"
+                      className="text-status-warn"
                     />
                     {isDrilling ? "等待确认..." : "演练高危拦截"}
                   </Button>
@@ -487,11 +406,12 @@ function App() {
                 }}
               >
                 <Input
+                  inputSize="sm"
                   value={echoDraft}
                   onChange={(event) => setEchoDraft(event.currentTarget.value)}
                   placeholder="输入回显测试载荷..."
                   aria-label="keel_ping 回显测试载荷"
-                  className="h-8 w-40 font-mono text-xs"
+                  className="w-40 font-mono"
                 />
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -517,43 +437,43 @@ function App() {
             {drillFeedback && (
               <div
                 className={cn(
-                  "mt-2.5 flex items-center justify-between gap-2 rounded-lg border px-3 py-1.5 text-xs",
+                  "mt-2.5 flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-caption",
                   drillFeedback.tone === "approved" &&
-                    "border-border bg-muted/50 text-foreground",
+                    "border-status-ok-border bg-status-ok-subtle text-foreground",
                   drillFeedback.tone === "blocked" &&
-                    "border-destructive/35 bg-destructive/10 text-foreground",
+                    "border-status-danger-border bg-status-danger-subtle text-foreground",
                   drillFeedback.tone === "info" &&
-                    "border-border bg-muted/40 text-muted-foreground",
+                    "border-status-info-border bg-status-info-subtle text-ink-secondary",
                   drillFeedback.tone === "error" &&
-                    "border-destructive/50 bg-destructive/15 text-destructive",
+                    "border-status-danger-border bg-status-danger-subtle text-status-danger",
                 )}
               >
                 <div className="flex min-w-0 items-center gap-2">
                   {drillFeedback.tone === "approved" && (
                     <CheckCircle2Icon
                       aria-hidden="true"
-                      className="size-3.5 shrink-0 text-(--keel-status-ok)"
+                      className="size-3.5 shrink-0 text-status-ok"
                     />
                   )}
                   {drillFeedback.tone === "blocked" && (
                     <ShieldXIcon
                       aria-hidden="true"
-                      className="size-3.5 shrink-0 text-destructive"
+                      className="size-3.5 shrink-0 text-status-danger"
                     />
                   )}
                   {drillFeedback.tone === "info" && (
                     <ShieldCheckIcon
                       aria-hidden="true"
-                      className="size-3.5 shrink-0 text-primary"
+                      className="size-3.5 shrink-0 text-status-info"
                     />
                   )}
                   {drillFeedback.tone === "error" && (
                     <AlertCircleIcon
                       aria-hidden="true"
-                      className="size-3.5 shrink-0 text-destructive"
+                      className="size-3.5 shrink-0 text-status-danger"
                     />
                   )}
-                  <span className="truncate font-mono text-xs">
+                  <span className="truncate font-mono text-caption">
                     {drillFeedback.text}
                   </span>
                 </div>
@@ -572,22 +492,22 @@ function App() {
           </div>
 
           {activeAlertMessage && (
-            <Alert variant="destructive" className="mt-3">
+            <Alert variant="destructive" className="mt-2.5">
               <AlertCircleIcon />
               <AlertTitle>
                 {snapshot?.error_message ? "MCP 监听异常" : "回环自检失败"}
               </AlertTitle>
-              <AlertDescription className="font-mono text-xs">
+              <AlertDescription className="font-mono text-caption">
                 {activeAlertMessage}
               </AlertDescription>
             </Alert>
           )}
         </header>
 
-        {/* Main Two-Column shadcn/ui Workspace (strictly viewport-bounded, zero page scroll) */}
-        <main className="grid min-h-0 flex-1 grid-cols-12 gap-4 p-4">
+        {/* Main Two-Column Workbench (strictly viewport-bounded, zero page scroll) */}
+        <main className="grid min-h-0 flex-1 grid-cols-12 gap-3 p-3">
           {/* Left Column: Client Integration Tabs + Tabbed Host Workbench */}
-          <div className="col-span-7 flex min-h-0 min-w-0 flex-col gap-4">
+          <div className="col-span-7 flex min-h-0 min-w-0 flex-col gap-3">
             <Card size="sm" className="shrink-0">
               <CardHeader className="border-b">
                 <CardTitle>
@@ -597,19 +517,15 @@ function App() {
                   通过 Streamable HTTP 将本地智能体挂载到当前单实例守护进程
                 </CardDescription>
                 <CardAction>
-                  <Button
-                    type="button"
+                  <CopyButton
+                    value={activeSnippet}
+                    label="复制代码"
+                    copiedLabel="已复制命令"
                     variant="secondary"
                     size="xs"
-                    onClick={() => void copyText("snippet", activeSnippet)}
-                  >
-                    {copiedKey === "snippet" ? (
-                      <CheckIcon data-icon="inline-start" />
-                    ) : (
-                      <CopyIcon data-icon="inline-start" />
-                    )}
-                    {copiedKey === "snippet" ? "已复制命令" : "复制代码"}
-                  </Button>
+                    showText
+                    side="bottom"
+                  />
                 </CardAction>
               </CardHeader>
 
@@ -621,7 +537,7 @@ function App() {
                   }
                   className="gap-2.5"
                 >
-                  <div className="border-b border-border pb-1">
+                  <div className="border-b border-border-subtle pb-1">
                     <TabsList
                       variant="line"
                       aria-label="客户端配置格式"
@@ -629,19 +545,19 @@ function App() {
                     >
                       <TabsTrigger
                         value="claude-code"
-                        className="flex-none px-2.5 text-xs"
+                        className="flex-none px-2.5 text-caption"
                       >
                         Claude Code
                       </TabsTrigger>
                       <TabsTrigger
                         value="cursor"
-                        className="flex-none px-2.5 text-xs"
+                        className="flex-none px-2.5 text-caption"
                       >
                         Cursor · mcp.json
                       </TabsTrigger>
                       <TabsTrigger
                         value="powershell"
-                        className="flex-none px-2.5 text-xs"
+                        className="flex-none px-2.5 text-caption"
                       >
                         PowerShell 探针
                       </TabsTrigger>
@@ -652,9 +568,10 @@ function App() {
                     ["claude-code", "cursor", "powershell"] as const
                   ).map((tabKey) => (
                     <TabsContent key={tabKey} value={tabKey} className="mt-0">
-                      <pre className="keel-code-scroll m-0 flex h-24 items-center overflow-auto rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs leading-relaxed text-foreground select-all">
-                        <code>{snippets[tabKey]}</code>
-                      </pre>
+                      <CodeWell
+                        code={snippets[tabKey]}
+                        viewportClassName="h-24"
+                      />
                     </TabsContent>
                   ))}
                 </Tabs>
@@ -675,21 +592,21 @@ function App() {
                   <CardTitle className="min-w-0 truncate">
                     <h2 id="workbench-host-heading">Windows 11 宿主治理工作台</h2>
                   </CardTitle>
-                  <CardDescription className="min-w-0 truncate text-xs">
+                  <CardDescription className="min-w-0 truncate">
                     MCP 契约元数据、Win32 活跃监听端口与本机开发工具链观测
                   </CardDescription>
                   <CardAction>
                     <TabsList aria-label="宿主工作台视图切换">
                       <TabsTrigger
                         value="tools"
-                        className="px-2.5 text-xs tabular-nums"
+                        className="px-2.5 text-caption tabular-nums"
                       >
                         工具契约 ({toolCount})
                       </TabsTrigger>
-                      <TabsTrigger value="ports" className="px-2.5 text-xs">
+                      <TabsTrigger value="ports" className="px-2.5 text-caption">
                         端口治理
                       </TabsTrigger>
-                      <TabsTrigger value="dev-env" className="px-2.5 text-xs">
+                      <TabsTrigger value="dev-env" className="px-2.5 text-caption">
                         本机环境
                       </TabsTrigger>
                     </TabsList>
@@ -709,21 +626,18 @@ function App() {
                         className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                       >
                         <Table className="table-fixed">
-                          <TableHeader className="sticky top-0 z-10 bg-card">
+                          <TableHeader className="sticky top-0 z-(--z-sticky) bg-surface-subtle">
                             <TableRow className="hover:bg-transparent">
-                              <TableHead
-                                scope="col"
-                                className="w-36 pl-3 text-xs"
-                              >
+                              <TableHead scope="col" className="w-36 pl-3">
                                 工具名
                               </TableHead>
-                              <TableHead scope="col" className="w-24 text-xs">
+                              <TableHead scope="col" className="w-24">
                                 归属层
                               </TableHead>
-                              <TableHead scope="col" className="w-32 text-xs">
+                              <TableHead scope="col" className="w-32">
                                 安全策略
                               </TableHead>
-                              <TableHead scope="col" className="pr-3 text-xs">
+                              <TableHead scope="col" className="pr-3">
                                 功能说明
                               </TableHead>
                             </TableRow>
@@ -733,59 +647,26 @@ function App() {
                               <TableRow key={tool.name}>
                                 <TableHead
                                   scope="row"
-                                  className="truncate pl-3 font-mono text-xs font-medium text-foreground"
+                                  className="truncate pl-3 font-mono text-caption font-medium text-foreground"
                                 >
                                   {tool.name}
                                 </TableHead>
                                 <TableCell>
-                                  <Badge
-                                    variant="outline"
-                                    className="font-mono text-[11px]"
-                                  >
+                                  <MetricPill tone="subtle">
                                     {tool.source}
-                                  </Badge>
+                                  </MetricPill>
                                 </TableCell>
                                 <TableCell>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Badge
-                                        variant={
-                                          tool.safety === "safe"
-                                            ? "secondary"
-                                            : "destructive"
-                                        }
-                                        className="text-[11px]"
-                                      >
-                                        {tool.safety === "safe"
-                                          ? "Safe · 直接放行"
-                                          : "Confirm · 需审批"}
-                                      </Badge>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top">
-                                      {tool.safety === "safe"
-                                        ? "只读或无副作用探针，框架直接执行并返回结构化结果"
-                                        : "高危操作将挂起 MCP 调用通道并弹出桌面端人工确认网关"}
-                                    </TooltipContent>
-                                  </Tooltip>
+                                  <SafetyTierBadge
+                                    safety={tool.safety}
+                                    mode="compact"
+                                  />
                                 </TableCell>
-                                <TableCell className="truncate pr-3 text-xs text-muted-foreground">
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span
-                                        tabIndex={0}
-                                        className="block truncate rounded-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                      >
-                                        {tool.description}
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent
-                                      side="top"
-                                      aria-hidden="true"
-                                      className="max-w-sm"
-                                    >
-                                      {tool.description}
-                                    </TooltipContent>
-                                  </Tooltip>
+                                <TableCell className="truncate pr-3 text-caption text-muted-foreground">
+                                  <TruncatedText
+                                    text={tool.description}
+                                    muted
+                                  />
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -795,7 +676,7 @@ function App() {
                     </ScrollArea>
                   </CardContent>
 
-                  <CardFooter className="shrink-0 justify-between py-2 text-xs text-muted-foreground">
+                  <CardFooter className="shrink-0 justify-between gap-2">
                     <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
                       <LayersIcon
                         aria-hidden="true"
@@ -805,10 +686,10 @@ function App() {
                         keel_core 与 workbench 单向解耦边界已锁定
                       </span>
                     </span>
-                    <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px]">
+                    <span className="inline-flex shrink-0 items-center gap-1 font-mono text-micro">
                       <ShieldCheckIcon
                         aria-hidden="true"
-                        className="size-3.5 text-(--keel-status-ok)"
+                        className="size-3.5 text-status-ok"
                       />
                       ConfirmRequired 人工审批保护生效中
                     </span>
@@ -866,79 +747,69 @@ function App() {
               <CardAction>
                 <div className="flex items-center gap-1.5">
                   {lastPingResult && !pingError && (
-                    <Badge
-                      variant="outline"
-                      className="font-mono text-[11px] tabular-nums text-(--keel-status-ok)"
-                    >
+                    <MetricPill tone="ok">
                       {lastPingResult.roundtrip_ms} ms
-                    </Badge>
+                    </MetricPill>
                   )}
-                  <Badge
-                    variant="secondary"
-                    className="font-mono tabular-nums select-none"
-                  >
+                  <MetricPill tone="neutral">
                     累计 {snapshot?.total_calls ?? 0}
-                  </Badge>
+                  </MetricPill>
                 </div>
               </CardAction>
             </CardHeader>
 
             <CardContent className="flex min-h-0 flex-1 flex-col p-0">
               {(snapshot?.recent_calls.length ?? 0) === 0 ? (
-                <div className="m-3 flex flex-1 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-muted/25 p-5 text-center">
-                  <div className="flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                    <TerminalIcon aria-hidden="true" className="size-4" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <p className="text-sm font-medium text-foreground">
-                      尚未捕获 tools/call 调用记录
-                    </p>
-                    <p className="max-w-[36ch] text-xs leading-relaxed text-muted-foreground">
-                      点击下方按钮发起一次真实本地回环握手，或通过左侧配置让外部客户端连接。
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={isPinging || serverStatus !== "running"}
-                    onClick={() => void runSelfTestPing(echoDraft)}
-                  >
-                    <SendHorizontalIcon data-icon="inline-start" />
-                    发送首条 keel_ping 自检
-                  </Button>
+                <div className="flex flex-1 p-3">
+                  <EmptyState
+                    icon={<TerminalIcon />}
+                    title="尚未捕获 tools/call 调用记录"
+                    description="点击下方按钮发起一次真实本地回环握手，或通过左侧配置让外部客户端连接。"
+                    action={
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={isPinging || serverStatus !== "running"}
+                        onClick={() => void runSelfTestPing(echoDraft)}
+                      >
+                        <SendHorizontalIcon data-icon="inline-start" />
+                        发送首条 keel_ping 自检
+                      </Button>
+                    }
+                  />
                 </div>
               ) : (
                 <ScrollArea className="min-h-0 flex-1 overflow-hidden">
-                  <div className="divide-y divide-border">
+                  <div className="divide-y divide-border-subtle">
                     {snapshot?.recent_calls.map((entry) => (
                       <div
                         key={entry.id}
-                        className="flex flex-col gap-1 px-3.5 py-2.5 transition-colors hover:bg-muted/35"
+                        className="flex flex-col gap-1 px-3 py-2.5 transition-colors duration-150 ease-(--ease-out-quart) hover:bg-surface-hover/65"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex min-w-0 items-center gap-1.5">
-                            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                            <span className="font-mono text-micro tabular-nums text-muted-foreground">
                               #{entry.id}
                             </span>
-                            <span className="truncate font-mono text-xs font-medium text-foreground">
+                            <span className="truncate font-mono text-caption font-medium text-foreground">
                               {entry.tool_name}
                             </span>
                             {entry.caller_hint && (
-                              <Badge
-                                variant="outline"
-                                className="max-w-36 truncate font-mono text-[10px] text-muted-foreground"
+                              <MetricPill
+                                tone="subtle"
+                                className="max-w-36 truncate text-muted-foreground"
                               >
                                 {entry.caller_hint}
-                              </Badge>
+                              </MetricPill>
                             )}
                           </div>
-                          <div className="flex shrink-0 items-center gap-2 font-mono text-[11px] tabular-nums text-muted-foreground">
+                          <div className="flex shrink-0 items-center gap-2 font-mono text-micro tabular-nums text-muted-foreground">
                             <span
                               className={
                                 entry.succeeded
-                                  ? "text-(--keel-status-ok)"
-                                  : "text-destructive"
+                                  ? "text-status-ok"
+                                  : "text-status-danger"
                               }
                             >
                               {entry.duration_ms} ms
@@ -946,9 +817,12 @@ function App() {
                             <span>{formatTimeHms(entry.timestamp_iso)}</span>
                           </div>
                         </div>
-                        <p className="truncate font-mono text-[11px] text-muted-foreground">
-                          {entry.summary}
-                        </p>
+                        <TruncatedText
+                          text={entry.summary}
+                          mono
+                          muted
+                          className="text-micro"
+                        />
                       </div>
                     ))}
                   </div>
@@ -959,9 +833,9 @@ function App() {
         </main>
 
         {/* Windows 11 Host & Singleton Tray Status Bar */}
-        <footer className="flex h-7 shrink-0 items-center justify-between gap-3 border-t border-border bg-card/55 px-5 text-xs text-muted-foreground select-none">
+        <footer className="flex h-7 shrink-0 items-center justify-between gap-3 border-t border-border-subtle bg-surface-subtle px-4 text-caption text-muted-foreground select-none">
           <div className="flex min-w-0 items-center gap-2 truncate">
-            <span className="font-medium text-foreground/90">
+            <span className="font-medium text-ink-secondary">
               {hostSummary
                 ? `${hostSummary.edition} ${hostSummary.display_version}`
                 : "Windows 11"}

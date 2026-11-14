@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircleIcon,
-  CheckCircle2Icon,
   CpuIcon,
-  MinusCircleIcon,
   RefreshCwIcon,
 } from "lucide-react";
 import { commands, type DevEnvScanReport } from "@/bindings";
+import {
+  MetricPill,
+  StatusBadge,
+  TruncatedText,
+  formatTimeHms,
+} from "@/components/ds";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardFooter } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,11 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { isTauriRuntime } from "@/keel-sdk";
 import { cn } from "@/lib/utils";
 
@@ -115,22 +113,6 @@ function buildBrowserPreviewDevEnvReport(): DevEnvScanReport {
   };
 }
 
-function formatScanHms(iso: string | undefined): string {
-  if (!iso) {
-    return "--:--:--";
-  }
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) {
-    return "--:--:--";
-  }
-  return parsed.toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
 export function DevEnvPanel({ isActive = true }: DevEnvPanelProps) {
   const [report, setReport] = useState<DevEnvScanReport | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -174,26 +156,20 @@ export function DevEnvPanel({ isActive = true }: DevEnvPanelProps) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* Summary & Rescan Header Strip */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-3 py-2">
         <div
           aria-live="polite"
-          className="flex flex-wrap items-center gap-1.5 text-xs"
+          className="flex flex-wrap items-center gap-1.5 text-caption"
         >
-          <Badge
-            variant="secondary"
-            className="font-mono tabular-nums select-none"
-          >
+          <MetricPill tone="neutral">
             已就绪 {installedCount} / {probes.length} 项工具链
-          </Badge>
-          <Badge
-            variant="outline"
-            className="font-mono text-[11px] tabular-nums text-muted-foreground select-none"
-          >
+          </MetricPill>
+          <MetricPill tone="subtle" className="text-muted-foreground">
             PATH {report?.path_entry_count ?? 0} 项
-          </Badge>
+          </MetricPill>
           {report && (
-            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-              扫描于 {formatScanHms(report.scanned_at_iso)}
+            <span className="font-mono text-micro tabular-nums text-muted-foreground">
+              扫描于 {formatTimeHms(report.scanned_at_iso)}
             </span>
           )}
         </div>
@@ -218,7 +194,7 @@ export function DevEnvPanel({ isActive = true }: DevEnvPanelProps) {
           <Alert variant="destructive">
             <AlertCircleIcon />
             <AlertTitle>本机开发环境扫描异常</AlertTitle>
-            <AlertDescription className="font-mono text-xs">
+            <AlertDescription className="font-mono text-caption">
               {error}
             </AlertDescription>
           </Alert>
@@ -229,10 +205,10 @@ export function DevEnvPanel({ isActive = true }: DevEnvPanelProps) {
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {isLoading && report === null ? (
           <div className="flex flex-col gap-2 p-3">
-            <Skeleton className="h-7 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-10/12" />
+            <Skeleton className="h-7 w-full rounded-sm" />
+            <Skeleton className="h-8 w-full rounded-sm" />
+            <Skeleton className="h-8 w-full rounded-sm" />
+            <Skeleton className="h-8 w-10/12 rounded-sm" />
           </div>
         ) : (
           <ScrollArea className="h-full">
@@ -243,21 +219,16 @@ export function DevEnvPanel({ isActive = true }: DevEnvPanelProps) {
               className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             >
               <Table className="table-fixed">
-                <TableHeader className="sticky top-0 z-10 bg-card">
+                <TableHeader className="sticky top-0 z-(--z-sticky) bg-surface-subtle">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead scope="col" className="w-36 pl-3 text-xs">
+                    <TableHead scope="col" className="w-36 pl-3">
                       工具链
                     </TableHead>
-                    <TableHead scope="col" className="w-24 text-xs">
+                    <TableHead scope="col" className="w-24">
                       状态
                     </TableHead>
-                    <TableHead scope="col" className="text-xs">
-                      版本摘要
-                    </TableHead>
-                    <TableHead
-                      scope="col"
-                      className="w-20 pr-3 text-right text-xs"
-                    >
+                    <TableHead scope="col">版本摘要</TableHead>
+                    <TableHead scope="col" className="w-20 pr-3 text-right">
                       耗时
                     </TableHead>
                   </TableRow>
@@ -268,88 +239,54 @@ export function DevEnvPanel({ isActive = true }: DevEnvPanelProps) {
                     <TableRow key={probe.id}>
                       <TableHead
                         scope="row"
-                        className="truncate pl-3 text-xs font-medium text-foreground"
+                        className="truncate pl-3 text-caption font-medium text-foreground"
                       >
                         {probe.executable_path ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span
-                                tabIndex={0}
-                                className="block truncate rounded-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                              >
-                                {probe.display_name}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent
-                              side="top"
-                              className="max-w-md font-mono text-[11px] break-all"
-                            >
-                              {probe.executable_path}
-                            </TooltipContent>
-                          </Tooltip>
+                          <TruncatedText
+                            text={probe.display_name}
+                            tooltip={probe.executable_path}
+                            tooltipClassName="font-mono text-micro"
+                            className="text-caption font-medium text-foreground"
+                          />
                         ) : (
-                          <span className="block truncate text-muted-foreground">
+                          <span className="block truncate text-caption text-muted-foreground">
                             {probe.display_name}
                           </span>
                         )}
                       </TableHead>
 
                       <TableCell>
-                        {probe.installed ? (
-                          <Badge
-                            variant="secondary"
-                            className="gap-1 text-[11px] select-none"
-                          >
-                            <CheckCircle2Icon
-                              aria-hidden="true"
-                              className="text-(--keel-status-ok)"
-                            />
-                            已就绪
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="outline"
-                            className="gap-1 text-[11px] text-muted-foreground select-none"
-                          >
-                            <MinusCircleIcon aria-hidden="true" />
-                            未检出
-                          </Badge>
-                        )}
+                        <StatusBadge tone={probe.installed ? "ok" : "neutral"}>
+                          {probe.installed ? "已就绪" : "未检出"}
+                        </StatusBadge>
                       </TableCell>
 
-                      <TableCell className="truncate font-mono text-xs text-muted-foreground">
+                      <TableCell className="truncate font-mono text-caption text-muted-foreground">
                         {probe.version ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span
-                                tabIndex={0}
-                                className="block truncate rounded-xs text-foreground/90 outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                              >
-                                {probe.version}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent
-                              side="top"
-                              className="max-w-md font-mono text-[11px] break-all"
-                            >
+                          <TruncatedText
+                            text={probe.version}
+                            mono
+                            className="text-caption text-foreground"
+                            tooltipClassName="font-mono text-micro"
+                            tooltip={
                               <div className="flex flex-col gap-0.5">
                                 <span>{probe.version}</span>
                                 {probe.executable_path && (
-                                  <span className="opacity-75">
+                                  <span className="text-muted-foreground">
                                     {probe.executable_path}
                                   </span>
                                 )}
                               </div>
-                            </TooltipContent>
-                          </Tooltip>
+                            }
+                          />
                         ) : (
-                          <span className="text-muted-foreground/70">
+                          <span className="text-caption text-muted-foreground">
                             未在系统 PATH 检出可执行文件
                           </span>
                         )}
                       </TableCell>
 
-                      <TableCell className="pr-3 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                      <TableCell className="pr-3 text-right font-mono text-caption tabular-nums text-muted-foreground">
                         {probe.probe_ms} ms
                       </TableCell>
                     </TableRow>
@@ -362,7 +299,7 @@ export function DevEnvPanel({ isActive = true }: DevEnvPanelProps) {
       </div>
 
       {/* Footer Strip */}
-      <CardFooter className="shrink-0 justify-between gap-2 py-2 text-xs text-muted-foreground">
+      <CardFooter className="shrink-0 justify-between gap-2">
         <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
           <CpuIcon
             aria-hidden="true"
@@ -372,7 +309,7 @@ export function DevEnvPanel({ isActive = true }: DevEnvPanelProps) {
             CREATE_NO_WINDOW 静默无弹窗并发探针
           </span>
         </span>
-        <span className="shrink-0 font-mono text-[11px] tabular-nums">
+        <span className="shrink-0 font-mono text-micro tabular-nums">
           {installedCount}/{probes.length} 可用
         </span>
       </CardFooter>

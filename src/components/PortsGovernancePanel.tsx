@@ -7,8 +7,13 @@ import {
   ShieldAlertIcon,
 } from "lucide-react";
 import { commands, type ActivePortReport } from "@/bindings";
+import {
+  EmptyState,
+  MetricPill,
+  TruncatedText,
+  formatTimeHms,
+} from "@/components/ds";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -96,22 +101,6 @@ function buildBrowserPreviewPortReport(): ActivePortReport {
   };
 }
 
-function formatCaptureHms(iso: string | undefined): string {
-  if (!iso) {
-    return "--:--:--";
-  }
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) {
-    return "--:--:--";
-  }
-  return parsed.toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
 export function PortsGovernancePanel({
   isActive = true,
   isServerRunning,
@@ -188,31 +177,28 @@ export function PortsGovernancePanel({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* Filter & Refresh Toolbar */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-3 py-2">
         <div className="relative flex min-w-0 flex-1 items-center sm:max-w-xs">
           <SearchIcon
             aria-hidden="true"
             className="pointer-events-none absolute left-2.5 size-3.5 text-muted-foreground"
           />
           <Input
+            inputSize="sm"
             value={filterQuery}
             onChange={(event) => setFilterQuery(event.currentTarget.value)}
             placeholder="筛选端口、进程名、PID 或地址..."
             aria-label="筛选活跃监听端口"
-            className="h-7 pl-8 text-xs"
+            className="pl-8 font-mono"
           />
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <Badge
-            variant="secondary"
-            aria-live="polite"
-            className="font-mono tabular-nums select-none"
-          >
+          <MetricPill tone="neutral" aria-live="polite">
             {normalizedQuery
               ? `${filteredEntries.length} / ${entries.length} 项`
               : `${entries.length} 个监听`}
-          </Badge>
+          </MetricPill>
           <Button
             type="button"
             variant="outline"
@@ -234,7 +220,7 @@ export function PortsGovernancePanel({
           <Alert variant="destructive">
             <AlertCircleIcon />
             <AlertTitle>端口快照枚举失败</AlertTitle>
-            <AlertDescription className="font-mono text-xs">
+            <AlertDescription className="font-mono text-caption">
               {error}
             </AlertDescription>
           </Alert>
@@ -245,10 +231,10 @@ export function PortsGovernancePanel({
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {isLoading && report === null ? (
           <div className="flex flex-col gap-2 p-3">
-            <Skeleton className="h-7 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-11/12" />
+            <Skeleton className="h-7 w-full rounded-sm" />
+            <Skeleton className="h-8 w-full rounded-sm" />
+            <Skeleton className="h-8 w-full rounded-sm" />
+            <Skeleton className="h-8 w-11/12 rounded-sm" />
           </div>
         ) : (
           <ScrollArea className="h-full">
@@ -259,21 +245,16 @@ export function PortsGovernancePanel({
               className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             >
               <Table className="table-fixed">
-                <TableHeader className="sticky top-0 z-10 bg-card">
+                <TableHeader className="sticky top-0 z-(--z-sticky) bg-surface-subtle">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead scope="col" className="w-40 pl-3 text-xs">
+                    <TableHead scope="col" className="w-40 pl-3">
                       端口 / 协议
                     </TableHead>
-                    <TableHead scope="col" className="w-28 text-xs">
+                    <TableHead scope="col" className="w-28">
                       监听地址
                     </TableHead>
-                    <TableHead scope="col" className="text-xs">
-                      PID / 进程
-                    </TableHead>
-                    <TableHead
-                      scope="col"
-                      className="w-24 pr-3 text-right text-xs"
-                    >
+                    <TableHead scope="col">PID / 进程</TableHead>
+                    <TableHead scope="col" className="w-24 pr-3 text-right">
                       演练操作
                     </TableHead>
                   </TableRow>
@@ -282,13 +263,20 @@ export function PortsGovernancePanel({
                 <TableBody>
                   {filteredEntries.length === 0 ? (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell
-                        colSpan={4}
-                        className="py-8 text-center text-xs text-muted-foreground"
-                      >
-                        {entries.length === 0
-                          ? "未检出活跃监听端口"
-                          : "未匹配到符合筛选条件的监听记录"}
+                      <TableCell colSpan={4} className="p-3 whitespace-normal">
+                        <EmptyState
+                          icon={<NetworkIcon />}
+                          title={
+                            entries.length === 0
+                              ? "未检出活跃监听端口"
+                              : "未匹配到符合筛选条件的监听记录"
+                          }
+                          description={
+                            entries.length === 0
+                              ? "当前主机暂未检测到活跃 TCPv4 或 TCPv6 监听套接字。"
+                              : "请尝试调整端口号、进程名、PID 或监听地址筛选关键词。"
+                          }
+                        />
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -298,60 +286,43 @@ export function PortsGovernancePanel({
                         <TableRow key={rowKey}>
                           <TableHead
                             scope="row"
-                            className="pl-3 font-mono text-xs font-medium tabular-nums text-foreground"
+                            className="pl-3 font-mono text-caption font-medium tabular-nums text-foreground"
                           >
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span>:{entry.port}</span>
-                              <Badge
-                                variant="outline"
-                                className="px-1.5 font-mono text-[10px]"
-                              >
+                              <MetricPill tone="subtle">
                                 {entry.protocol}
-                              </Badge>
+                              </MetricPill>
                               {entry.is_keeldesk_self && (
-                                <Badge
-                                  variant="default"
-                                  className="px-1.5 text-[10px]"
-                                >
-                                  KeelDesk
-                                </Badge>
+                                <MetricPill tone="primary">KeelDesk</MetricPill>
                               )}
                             </div>
                           </TableHead>
 
-                          <TableCell className="truncate font-mono text-xs tabular-nums text-muted-foreground">
+                          <TableCell className="truncate font-mono text-caption tabular-nums text-muted-foreground">
                             {entry.local_addr}
                           </TableCell>
 
-                          <TableCell className="truncate text-xs">
+                          <TableCell className="truncate text-caption">
                             {entry.exe_path ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span
-                                    tabIndex={0}
-                                    className="inline-flex max-w-full items-center gap-1.5 truncate rounded-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                  >
-                                    <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
-                                      {entry.pid}
-                                    </span>
-                                    <span className="truncate font-mono text-xs text-foreground">
-                                      {entry.process_name}
-                                    </span>
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="top"
-                                  className="max-w-md font-mono text-[11px] break-all"
-                                >
-                                  {entry.exe_path}
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span className="inline-flex max-w-full items-center gap-1.5 truncate">
-                                <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                              <TruncatedText
+                                text={entry.process_name}
+                                tooltip={entry.exe_path}
+                                tooltipClassName="font-mono text-micro"
+                              >
+                                <span className="shrink-0 font-mono text-micro tabular-nums text-muted-foreground">
                                   {entry.pid}
                                 </span>
-                                <span className="truncate font-mono text-xs text-foreground">
+                                <span className="truncate font-mono text-caption text-foreground">
+                                  {entry.process_name}
+                                </span>
+                              </TruncatedText>
+                            ) : (
+                              <span className="inline-flex max-w-full items-center gap-1.5 truncate">
+                                <span className="shrink-0 font-mono text-micro tabular-nums text-muted-foreground">
+                                  {entry.pid}
+                                </span>
+                                <span className="truncate font-mono text-caption text-foreground">
                                   {entry.process_name}
                                 </span>
                               </span>
@@ -391,7 +362,7 @@ export function PortsGovernancePanel({
       </div>
 
       {/* Footer Strip */}
-      <CardFooter className="shrink-0 justify-between gap-2 py-2 text-xs text-muted-foreground">
+      <CardFooter className="shrink-0 justify-between gap-2">
         <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
           <NetworkIcon
             aria-hidden="true"
@@ -401,8 +372,8 @@ export function PortsGovernancePanel({
             Win32 GetExtendedTcpTable 原生监听快照
           </span>
         </span>
-        <span className="shrink-0 font-mono text-[11px] tabular-nums">
-          采样 {formatCaptureHms(report?.captured_at_iso)}
+        <span className="shrink-0 font-mono text-micro tabular-nums">
+          采样 {formatTimeHms(report?.captured_at_iso)}
         </span>
       </CardFooter>
     </div>

@@ -4,10 +4,14 @@ import {
   CheckIcon,
   ClockIcon,
   KeyRoundIcon,
-  ShieldAlertIcon,
   ShieldXIcon,
 } from "lucide-react";
 import type { PendingToolApproval } from "@/bindings";
+import {
+  CodeWell,
+  MetricPill,
+  SafetyTierBadge,
+} from "@/components/ds";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -17,11 +21,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 
 export interface ToolApprovalDialogProps {
   activeApproval: PendingToolApproval | null;
@@ -84,7 +85,8 @@ export function ToolApprovalDialog({
   }, [activeApproval, nowMs]);
 
   const prettyArguments = useMemo(
-    () => (activeApproval ? formatPrettyJson(activeApproval.arguments_json) : "{}"),
+    () =>
+      activeApproval ? formatPrettyJson(activeApproval.arguments_json) : "{}",
     [activeApproval],
   );
 
@@ -99,33 +101,26 @@ export function ToolApprovalDialog({
         <AlertDialogHeader className="gap-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant="destructive" className="gap-1 select-none">
-                <ShieldAlertIcon aria-hidden="true" />
-                ConfirmRequired · 高危拦截
-              </Badge>
+              <SafetyTierBadge
+                safety="confirm_required"
+                mode="banner"
+                withTooltip={false}
+              />
               {pendingCount > 1 && (
-                <Badge
-                  variant="secondary"
-                  className="font-mono tabular-nums select-none"
-                >
+                <MetricPill tone="neutral">
                   1 / {pendingCount} 待审批
-                </Badge>
+                </MetricPill>
               )}
             </div>
 
-            <Badge
-              variant="outline"
+            <MetricPill
+              tone={remainingSecs <= 10 ? "danger" : "subtle"}
               aria-live="polite"
-              className={cn(
-                "gap-1 font-mono tabular-nums select-none",
-                remainingSecs <= 10
-                  ? "border-destructive/50 text-destructive"
-                  : "text-muted-foreground",
-              )}
+              className="gap-1"
             >
               <ClockIcon aria-hidden="true" />
               {remainingSecs}s 后超时阻断
-            </Badge>
+            </MetricPill>
           </div>
 
           <AlertDialogTitle>人工确认：外部智能体请求高危工具调用</AlertDialogTitle>
@@ -139,7 +134,7 @@ export function ToolApprovalDialog({
 
         {activeApproval && (
           <div className="flex min-w-0 flex-col gap-3">
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-border bg-background/60 px-3 py-2.5 text-xs">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md border border-border-subtle bg-surface-sunken px-3 py-2.5 text-caption">
               <div className="flex min-w-0 flex-col gap-0.5">
                 <dt className="text-muted-foreground">目标工具</dt>
                 <dd className="truncate font-mono font-medium text-foreground">
@@ -150,9 +145,9 @@ export function ToolApprovalDialog({
               <div className="flex min-w-0 flex-col gap-0.5">
                 <dt className="text-muted-foreground">注册模块</dt>
                 <dd className="flex items-center">
-                  <Badge variant="outline" className="font-mono text-[11px]">
+                  <MetricPill tone="subtle">
                     {activeApproval.tool_source}
-                  </Badge>
+                  </MetricPill>
                 </dd>
               </div>
 
@@ -172,18 +167,21 @@ export function ToolApprovalDialog({
             </dl>
 
             <div className="flex min-w-0 flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between gap-2 text-caption text-muted-foreground">
                 <span>请求参数载荷 (JSON)</span>
-                <span className="font-mono text-[11px] tabular-nums">
+                <span className="font-mono text-micro tabular-nums">
                   请求单号 {activeApproval.request_id}
                 </span>
               </div>
 
-              <ScrollArea className="max-h-40 overflow-hidden rounded-lg border border-border bg-muted/40 p-3 *:data-[slot=scroll-area-viewport]:max-h-[8.5rem]">
-                <pre className="m-0 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap text-foreground">
-                  <code>{prettyArguments}</code>
-                </pre>
-              </ScrollArea>
+              <CodeWell
+                code={prettyArguments}
+                copyValue={prettyArguments}
+                copyLabel="复制请求参数"
+                copiedLabel="已复制参数"
+                wrapLines
+                viewportClassName="max-h-36"
+              />
             </div>
           </div>
         )}
@@ -192,7 +190,7 @@ export function ToolApprovalDialog({
           <Alert variant="destructive">
             <AlertCircleIcon />
             <AlertTitle>审批指令提交失败</AlertTitle>
-            <AlertDescription className="font-mono text-xs">
+            <AlertDescription className="font-mono text-caption">
               {error}
             </AlertDescription>
           </Alert>
