@@ -67,6 +67,9 @@
 
   /* Brand primary variants */
   --color-primary-hover: var(--keel-indigo-hover);
+  --color-primary-solid: var(--primary-solid);
+  --color-primary-solid-hover: var(--primary-solid-hover);
+  --color-primary-ink: var(--primary-ink);
   --color-primary-subtle: var(--primary-subtle);
   --color-primary-border: var(--primary-border);
 

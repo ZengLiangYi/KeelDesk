@@ -4,6 +4,9 @@ description: Windows 11 native MCP runtime spine and monochrome developer workbe
 colors:
   keel-indigo: "#7c66ff"
   keel-indigo-hover: "#8e7bff"
+  primary-solid: "#634ce8"
+  primary-solid-hover: "#705af0"
+  primary-ink: "#a99bff"
   surface-sunken: "#0b0b0f"
   surface-canvas: "#111116"
   surface-subtle: "#14141b"
@@ -76,14 +79,14 @@ spacing:
   2xl: "24px"
 components:
   button-primary:
-    backgroundColor: "{colors.keel-indigo}"
+    backgroundColor: "{colors.primary-solid}"
     textColor: "{colors.ink-primary}"
     typography: "{typography.body}"
     rounded: "{rounded.sm}"
     height: "32px"
     padding: "0px 12px"
   button-primary-hover:
-    backgroundColor: "{colors.keel-indigo-hover}"
+    backgroundColor: "{colors.primary-solid-hover}"
   button-outline:
     backgroundColor: "{colors.surface-panel}"
     textColor: "{colors.ink-primary}"

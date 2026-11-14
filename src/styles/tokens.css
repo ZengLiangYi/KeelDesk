@@ -37,6 +37,9 @@
    * -------------------------------------------------------------------------- */
   --keel-indigo: #7c66ff;
   --keel-indigo-hover: #8e7bff;
+  --primary-solid: #634ce8;
+  --primary-solid-hover: #705af0;
+  --primary-ink: #a99bff;
   --primary-subtle: rgb(124 102 255 / 0.14);
   --primary-border: rgb(124 102 255 / 0.34);
 
@@ -55,11 +58,6 @@
   --status-info: #38bdf8;
   --status-info-subtle: rgb(56 189 248 / 0.13);
   --status-info-border: rgb(56 189 248 / 0.30);
-
-  /* Legacy status aliases retained until component migration */
-  --keel-status-ok: var(--status-ok);
-  --keel-status-warn: var(--status-warn);
-  --keel-status-err: var(--status-danger);
 
   /* --------------------------------------------------------------------------
    * 5. shadcn/ui Semantic Mapping

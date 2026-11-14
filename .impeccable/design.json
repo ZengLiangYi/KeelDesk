@@ -194,7 +194,7 @@
       "refersTo": "button-primary",
       "description": "Primary confirmation action in Keel Indigo (32px height, 6px radius).",
       "html": "<button class=\"ds-btn-primary\" type=\"button\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 6 9 17l-5-5\"/></svg><span>允许本次执行</span></button>",
-      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; background: var(--keel-indigo, #7c66ff); color: #fafaff; border: 1px solid transparent; border-radius: var(--radius-sm, 6px); font-family: var(--font-sans, 'Segoe UI Variable Text', system-ui, sans-serif); font-size: 13px; font-weight: 500; cursor: pointer; transition: background 150ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-primary:hover { background: var(--keel-indigo-hover, #8e7bff); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(124, 102, 255, 0.5); }"
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; background: var(--primary-solid, #634ce8); color: #fafaff; border: 1px solid transparent; border-radius: var(--radius-sm, 6px); font-family: var(--font-sans, 'Segoe UI Variable Text', system-ui, sans-serif); font-size: 13px; font-weight: 500; cursor: pointer; transition: background 150ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-primary:hover { background: var(--primary-solid-hover, #705af0); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(124, 102, 255, 0.5); }"
     },
     {
       "name": "Outline Button",
