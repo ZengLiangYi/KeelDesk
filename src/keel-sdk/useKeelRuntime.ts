@@ -23,11 +23,34 @@ const BROWSER_PREVIEW_SNAPSHOT: KeelRuntimeSnapshot = {
       source: "keel_core",
       safety: "safe",
     },
+    {
+      name: "scan_dev_env",
+      description:
+        "Probe installed Windows 11 developer toolchains (versions, executable paths, and latency) without flashing console windows.",
+      source: "workbench",
+      safety: "safe",
+    },
+    {
+      name: "list_active_ports",
+      description:
+        "Enumerate active Windows 11 listening TCPv4/TCPv6 ports and their owning processes via native Win32 IP Helper APIs.",
+      source: "workbench",
+      safety: "safe",
+    },
+    {
+      name: "kill_port_process",
+      description:
+        "Terminate the process owning a listening TCP port on Windows 11 (protected by KeelDesk interactive desktop approval).",
+      source: "workbench",
+      safety: "confirm_required",
+    },
   ],
   recent_calls: [],
+  pending_approvals: [],
+  session_allowlist: [],
 };
 
-function isTauriRuntime(): boolean {
+export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
@@ -79,7 +102,7 @@ export function useKeelRuntime() {
             timestamp_iso: now,
           },
           roundtrip_ms: 2,
-          advertised_tools: ["keel_ping"],
+          advertised_tools: BROWSER_PREVIEW_SNAPSHOT.tools.map((t) => t.name),
         });
         setSnapshot((prev) => {
           const base = prev ?? BROWSER_PREVIEW_SNAPSHOT;
