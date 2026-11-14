@@ -1,0 +1,42 @@
+name: Feature Request
+description: Propose a new MCP capability, Windows 11 integration, or workbench enhancement
+title: "[Feat]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Problem / Motivation
+      description: What problem does this solve for Windows 11 developers or AI agent workflows?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the desired behavior, tool contract, or UI interaction.
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Architectural Layer
+      description: Which architectural layer does this proposal target?
+      options:
+        - keel_core / keel-sdk Spine
+        - workbench App / Host Tool
+        - Design System / UI
+        - Docs / CI
+    validations:
+      required: true
+  - type: dropdown
+    id: safety_tier
+    attributes:
+      label: MCP Safety Tier
+      description: If this introduces or changes an MCP tool, which safety tier should apply?
+      options:
+        - Not an MCP tool
+        - Safe (read-only / side-effect free)
+        - ConfirmRequired (human-in-the-loop gate)
+    validations:
+      required: true

@@ -1,0 +1,59 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in KeelDesk on Windows 11
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please note that KeelDesk targets **Windows 11 (Build 22000+)** exclusively.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A clear and concise description of what went wrong.
+      placeholder: e.g., kill_port_process approval dialog failed to focus from system tray...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Exact steps to reproduce the issue.
+      placeholder: |
+        1. Launch KeelDesk and minimize to the system tray.
+        2. Trigger a ConfirmRequired tool call from Claude Code.
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected vs Actual Behavior
+      description: Describe what you expected to happen and what actually occurred.
+    validations:
+      required: true
+  - type: input
+    id: winver
+    attributes:
+      label: Windows 11 Edition & Build (`winver`)
+      description: Run `winver` or `[System.Environment]::OSVersion.Version` and paste your build number.
+      placeholder: e.g., Windows 11 Pro 24H2 (Build 26100.2033)
+    validations:
+      required: true
+  - type: input
+    id: keeldesk_version
+    attributes:
+      label: KeelDesk Version / Commit
+      description: Version from the app/release or git commit SHA.
+      placeholder: e.g., v0.1.0 or 458a3b6
+    validations:
+      required: true
+  - type: input
+    id: mcp_client
+    attributes:
+      label: Connected MCP Client
+      description: Which AI client or HTTP probe was connected (if applicable)?
+      placeholder: e.g., Claude Code CLI, Cursor, PowerShell Invoke-RestMethod, or None
+    validations:
+      required: false
