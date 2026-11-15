@@ -30,6 +30,7 @@ import {
   MetricPill,
   SafetyTierBadge,
   StatusBadge,
+  StatusDot,
   TruncatedText,
   formatTimeHms,
   odrReadinessLabel,
@@ -50,6 +51,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -68,9 +70,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  KeelDevTools,
   isTauriRuntime,
-  useKeelRuntime,
-  useProcessHost,
+  useExternalMcpClients,
+  useKeelDevTools,
+  useMcpServerState,
   useToolApproval,
   useWinOdr,
 } from "@/keel-sdk";
@@ -95,14 +99,7 @@ const FALLBACK_HOST_SUMMARY: Win11HostSummary = {
 };
 
 function App() {
-  const {
-    snapshot,
-    isLoading,
-    isPinging,
-    lastPingResult,
-    pingError,
-    runSelfTestPing,
-  } = useKeelRuntime();
+  const mcpServer = useMcpServerState();
 
   const {
     pendingApprovals,
@@ -115,7 +112,7 @@ function App() {
     deny,
     clearSessionAllowlist,
     simulatePreviewApproval,
-  } = useToolApproval(snapshot);
+  } = useToolApproval(mcpServer.snapshot);
 
   const [hostSummary, setHostSummary] = useState<Win11HostSummary | null>(null);
   const [isHostLoading, setIsHostLoading] = useState(true);
@@ -125,13 +122,16 @@ function App() {
   const [activeWorkbenchTab, setActiveWorkbenchTab] =
     useState<WorkbenchTab>("tools");
   const [isOdrSheetOpen, setIsOdrSheetOpen] = useState(false);
+  const [isDevToolsOpen, setIsDevToolsOpen] = useState(false);
   const [isDrilling, setIsDrilling] = useState(false);
   const [drillFeedback, setDrillFeedback] =
     useState<DrillFeedbackNotice | null>(null);
 
-  const endpointUrl = snapshot?.endpoint_url ?? "http://127.0.0.1:19527/mcp";
+  const endpointUrl = mcpServer.endpointUrl;
+  const healthzUrl = mcpServer.healthzUrl;
   const winOdr = useWinOdr(endpointUrl);
-  const processHost = useProcessHost();
+  const externalClients = useExternalMcpClients();
+  const devTools = useKeelDevTools();
 
   useEffect(() => {
     // Drop inline critical boot styles once React + Tailwind stylesheet take over
@@ -166,11 +166,6 @@ function App() {
       cancelled = true;
     };
   }, []);
-
-  const healthzUrl = useMemo(
-    () => endpointUrl.replace(/\/mcp$/, "/healthz"),
-    [endpointUrl],
-  );
 
   const snippets = useMemo<Record<ConnectClientTab, string>>(
     () => ({
@@ -269,15 +264,17 @@ function App() {
     }
   }
 
-  const isBootstrapping = (isLoading && snapshot === null) || isHostLoading;
+  const isBootstrapping =
+    (mcpServer.isLoading && mcpServer.snapshot === null) || isHostLoading;
   if (isBootstrapping) {
     return <WorkbenchSkeleton />;
   }
 
-  const serverStatus: KeelServerStatus = snapshot?.status ?? "starting";
+  const serverStatus: KeelServerStatus = mcpServer.status;
   const activeSnippet = snippets[activeClientTab];
-  const activeAlertMessage = snapshot?.error_message ?? pingError;
-  const toolCount = snapshot?.tools.length ?? 4;
+  const activeAlertMessage =
+    mcpServer.snapshot?.error_message ?? mcpServer.pingError;
+  const toolCount = mcpServer.snapshot?.tools.length ?? 4;
 
   return (
     <TooltipProvider delayDuration={220}>
@@ -306,6 +303,16 @@ function App() {
         onClearOutcome={winOdr.clearOutcome}
       />
 
+      <KeelDevTools
+        open={isDevToolsOpen}
+        onOpenChange={setIsDevToolsOpen}
+        devTools={devTools}
+        activeSessions={mcpServer.activeSessions}
+        lastHealthCheck={mcpServer.lastHealthCheck}
+        isCheckingHealth={mcpServer.isCheckingHealth}
+        onCheckHealth={() => void mcpServer.checkHealth()}
+      />
+
       <div className="flex h-dvh w-full flex-col overflow-clip bg-background text-foreground">
         {/* Top Workbench Command Bar */}
         <header className="shrink-0 border-b border-border-subtle bg-surface-panel px-4 py-2.5">
@@ -328,7 +335,7 @@ function App() {
                     KeelDesk
                   </h1>
                   <StatusBadge tone={serverStatusToTone(serverStatus)}>
-                    {serverStatusLabel(snapshot?.status)}
+                    {serverStatusLabel(mcpServer.snapshot?.status)}
                   </StatusBadge>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -359,6 +366,39 @@ function App() {
                     copiedLabel="已复制端点 URL"
                     side="bottom"
                   />
+                  {mcpServer.activeSessions.length > 0 && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <MetricPill
+                          tone="subtle"
+                          tabIndex={0}
+                          className="gap-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        >
+                          <StatusDot tone="ok" />
+                          <span>{mcpServer.activeSessions.length} 会话</span>
+                        </MetricPill>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-sm">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">
+                            当前活跃 Streamable HTTP 会话（共{" "}
+                            {mcpServer.activeSessions.length} 个）：
+                          </span>
+                          {mcpServer.activeSessions.map((session) => (
+                            <code
+                              key={session.session_id}
+                              className="font-mono text-micro"
+                            >
+                              {session.client_name
+                                ? `${session.client_name}${session.client_version ? ` ${session.client_version}` : ""}`
+                                : session.user_agent ?? session.session_id}{" "}
+                              · {session.request_count} reqs
+                            </code>
+                          ))}
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                 </div>
               </div>
             </div>
@@ -434,7 +474,7 @@ function App() {
                 className="flex shrink-0 items-center gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  void runSelfTestPing(echoDraft);
+                  void mcpServer.runSelfTestPing(echoDraft);
                 }}
               >
                 <Input
@@ -450,10 +490,10 @@ function App() {
                     <Button
                       type="submit"
                       size="sm"
-                      disabled={isPinging || serverStatus !== "running"}
+                      disabled={mcpServer.isPinging || serverStatus !== "running"}
                     >
                       <SendHorizontalIcon data-icon="inline-start" />
-                      {isPinging ? "握手中..." : "回环自检"}
+                      {mcpServer.isPinging ? "握手中..." : "回环自检"}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
@@ -527,7 +567,9 @@ function App() {
             <Alert variant="destructive" className="mt-2.5">
               <AlertCircleIcon />
               <AlertTitle>
-                {snapshot?.error_message ? "MCP 监听异常" : "回环自检失败"}
+                {mcpServer.snapshot?.error_message
+                  ? "MCP 监听异常"
+                  : "回环自检失败"}
               </AlertTitle>
               <AlertDescription className="font-mono text-caption">
                 {activeAlertMessage}
@@ -692,9 +734,9 @@ function App() {
                     MCP 契约、受控 Stdio 子进程、监听端口与开发工具链
                   </CardDescription>
                   <CardAction>
-                    {processHost.hostSnapshot.running_count > 0 ? (
+                    {externalClients.runningCount > 0 ? (
                       <StatusBadge tone="ok" mono>
-                        {processHost.hostSnapshot.running_count} 子进程运行
+                        {externalClients.runningCount} 子进程运行
                       </StatusBadge>
                     ) : (
                       <MetricPill tone="subtle">Win32 原生治理</MetricPill>
@@ -718,7 +760,7 @@ function App() {
                       value="process-host"
                       className="flex-none px-2.5 text-caption tabular-nums"
                     >
-                      子进程托管 ({processHost.hostSnapshot.servers.length})
+                      子进程托管 ({externalClients.clients.length})
                     </TabsTrigger>
                     <TabsTrigger
                       value="ports"
@@ -765,7 +807,7 @@ function App() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {(snapshot?.tools ?? []).map((tool) => (
+                            {mcpServer.tools.map((tool) => (
                               <TableRow key={tool.name}>
                                 <TableHead
                                   scope="row"
@@ -824,17 +866,26 @@ function App() {
                   className="mt-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
                 >
                   <ProcessHostPanel
-                    hostSnapshot={processHost.hostSnapshot}
-                    isLoading={processHost.isLoading}
-                    isStarting={processHost.isStarting}
-                    busyServerIds={processHost.busyServerIds}
-                    error={processHost.error}
-                    onStartServer={processHost.startChildServer}
-                    onStopServer={processHost.stopChildServer}
-                    onRemoveServer={processHost.removeChildServer}
-                    onRestartServer={processHost.restartChildServer}
-                    onRefresh={processHost.refreshSnapshot}
-                    onClearError={processHost.clearError}
+                    hostSnapshot={externalClients.hostSnapshot}
+                    isLoading={externalClients.isLoading}
+                    isStarting={externalClients.isStarting}
+                    busyServerIds={externalClients.busyClientIds}
+                    callingServerIds={externalClients.callingClientIds}
+                    error={externalClients.error}
+                    onStartServer={externalClients.startClient}
+                    onStopServer={externalClients.stopClient}
+                    onRemoveServer={externalClients.removeClient}
+                    onRestartServer={externalClients.restartClient}
+                    onCallTool={externalClients.callClientTool}
+                    onInspectTraceSeq={(traceSeq) => {
+                      devTools.setTransportFilter("all");
+                      devTools.setStatusFilter("all");
+                      devTools.setSearchQuery("");
+                      devTools.setSelectedSeq(traceSeq);
+                      setIsDevToolsOpen(true);
+                    }}
+                    onRefresh={externalClients.refreshSnapshot}
+                    onClearError={externalClients.clearError}
                   />
                 </TabsContent>
 
@@ -888,20 +939,37 @@ function App() {
               </CardDescription>
               <CardAction>
                 <div className="flex items-center gap-1.5">
-                  {lastPingResult && !pingError && (
+                  {mcpServer.lastPingResult && !mcpServer.pingError && (
                     <MetricPill tone="ok">
-                      {lastPingResult.roundtrip_ms} ms
+                      {mcpServer.lastPingResult.roundtrip_ms} ms
                     </MetricPill>
                   )}
                   <MetricPill tone="neutral">
-                    累计 {snapshot?.total_calls ?? 0}
+                    累计 {mcpServer.totalCalls}
                   </MetricPill>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        onClick={() => setIsDevToolsOpen(true)}
+                      >
+                        <TerminalIcon data-icon="inline-start" />
+                        协议调试
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <span>打开 KeelDevTools 协议调试</span>
+                      <Kbd>{"Ctrl + `"}</Kbd>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </CardAction>
             </CardHeader>
 
             <CardContent className="flex min-h-0 flex-1 flex-col p-0">
-              {(snapshot?.recent_calls.length ?? 0) === 0 ? (
+              {mcpServer.recentCalls.length === 0 ? (
                 <div className="flex flex-1 p-3">
                   <EmptyState
                     icon={<TerminalIcon />}
@@ -912,8 +980,10 @@ function App() {
                         type="button"
                         variant="secondary"
                         size="sm"
-                        disabled={isPinging || serverStatus !== "running"}
-                        onClick={() => void runSelfTestPing(echoDraft)}
+                        disabled={
+                          mcpServer.isPinging || serverStatus !== "running"
+                        }
+                        onClick={() => void mcpServer.runSelfTestPing(echoDraft)}
                       >
                         <SendHorizontalIcon data-icon="inline-start" />
                         发送首条 keel_ping 自检
@@ -924,12 +994,17 @@ function App() {
               ) : (
                 <ScrollArea className="min-h-0 flex-1 overflow-hidden">
                   <div className="divide-y divide-border-subtle">
-                    {snapshot?.recent_calls.map((entry) => (
-                      <div
+                    {mcpServer.recentCalls.map((entry) => (
+                      <button
                         key={entry.id}
-                        className="flex flex-col gap-1 px-3 py-2.5 transition-colors duration-150 ease-(--ease-out-quart) hover:bg-surface-hover/65"
+                        type="button"
+                        onClick={() => {
+                          devTools.selectByLinkedCallId(entry.id);
+                          setIsDevToolsOpen(true);
+                        }}
+                        className="flex w-full cursor-pointer flex-col gap-1 px-3 py-2.5 text-left transition-colors duration-150 ease-(--ease-out-quart) outline-none hover:bg-surface-hover/65 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                       >
-                        <div className="flex items-center justify-between gap-2">
+                        <div className="flex w-full items-center justify-between gap-2">
                           <div className="flex min-w-0 items-center gap-1.5">
                             <span className="font-mono text-micro tabular-nums text-muted-foreground">
                               #{entry.id}
@@ -959,13 +1034,10 @@ function App() {
                             <span>{formatTimeHms(entry.timestamp_iso)}</span>
                           </div>
                         </div>
-                        <TruncatedText
-                          text={entry.summary}
-                          mono
-                          muted
-                          className="text-micro"
-                        />
-                      </div>
+                        <span className="block max-w-full truncate font-mono text-micro text-muted-foreground">
+                          {entry.summary}
+                        </span>
+                      </button>
                     ))}
                   </div>
                 </ScrollArea>
@@ -999,10 +1071,43 @@ function App() {
           </div>
 
           <div className="hidden shrink-0 items-center gap-2 sm:flex">
-            <span>关闭窗口自动收起至系统托盘（MCP 持续常驻）</span>
+            <span className="hidden md:inline">
+              关闭窗口自动收起至系统托盘（MCP 持续常驻）
+            </span>
+            <Separator
+              orientation="vertical"
+              className="my-1.5 hidden md:block"
+            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  aria-expanded={isDevToolsOpen}
+                  onClick={() => setIsDevToolsOpen((prev) => !prev)}
+                  className={cn(
+                    "h-5 gap-1.5 px-1.5 font-mono text-micro tabular-nums",
+                    isDevToolsOpen && "bg-surface-hover text-foreground",
+                  )}
+                >
+                  {devTools.stats.errorOrBlockedCount > 0 && (
+                    <StatusDot tone="danger" />
+                  )}
+                  <span>KeelDevTools</span>
+                  <span className="text-muted-foreground">
+                    {devTools.stats.totalCount}
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <span>切换 KeelDevTools 协议调试器</span>
+                <Kbd>{"Ctrl + `"}</Kbd>
+              </TooltipContent>
+            </Tooltip>
             <Separator orientation="vertical" className="my-1.5" />
             <span className="font-mono tabular-nums">
-              v{snapshot?.server_version ?? "0.1.0"}
+              v{mcpServer.snapshot?.server_version ?? "0.1.0"}
             </span>
           </div>
         </footer>

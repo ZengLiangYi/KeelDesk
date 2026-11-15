@@ -271,7 +271,7 @@ export function KeelDevTools({
       <SheetContent
         side="bottom"
         showCloseButton={false}
-        className="flex h-[min(74dvh,560px)] flex-col gap-0 p-0"
+        className="flex h-[72dvh] max-h-140 flex-col gap-0 overflow-hidden p-0 data-[side=bottom]:h-[72dvh] data-[side=bottom]:max-h-140"
       >
         <TooltipProvider delayDuration={220}>
           {/* Header Bar */}

@@ -15,6 +15,7 @@ import {
 import type {
   ChildEnvVar,
   ChildServerRecord,
+  ChildToolCallResult,
   ProcessHostSnapshot,
   SpawnChildServerSpec,
 } from "@/bindings";
@@ -23,6 +24,7 @@ import {
   EmptyState,
   MetricPill,
   StatusBadge,
+  StatusDot,
   TruncatedText,
   childStatusLabel,
   childStatusToTone,
@@ -70,6 +72,7 @@ export interface ProcessHostPanelProps {
   isLoading: boolean;
   isStarting: boolean;
   busyServerIds: Record<string, boolean>;
+  callingServerIds?: Record<string, boolean>;
   error: string | null;
   onStartServer: (
     spec: SpawnChildServerSpec,
@@ -77,6 +80,12 @@ export interface ProcessHostPanelProps {
   onStopServer: (serverId: string) => Promise<ChildServerRecord | null>;
   onRemoveServer: (serverId: string) => Promise<boolean>;
   onRestartServer: (serverId: string) => Promise<ChildServerRecord | null>;
+  onCallTool?: (
+    serverId: string,
+    toolName: string,
+    argumentsJson?: string | null,
+  ) => Promise<ChildToolCallResult | null>;
+  onInspectTraceSeq?: (traceSeq: number) => void;
   onRefresh: () => Promise<ProcessHostSnapshot | null>;
   onClearError: () => void;
 }
@@ -205,11 +214,14 @@ export function ProcessHostPanel({
   isLoading,
   isStarting,
   busyServerIds,
+  callingServerIds,
   error,
   onStartServer,
   onStopServer,
   onRemoveServer,
   onRestartServer,
+  onCallTool,
+  onInspectTraceSeq,
   onRefresh,
   onClearError,
 }: ProcessHostPanelProps) {
@@ -217,6 +229,9 @@ export function ProcessHostPanel({
   const [inspectedServerId, setInspectedServerId] = useState<string | null>(
     null,
   );
+  const [callingToolKey, setCallingToolKey] = useState<string | null>(null);
+  const [lastToolCallResult, setLastToolCallResult] =
+    useState<ChildToolCallResult | null>(null);
 
   // Add-dialog form state
   const [formId, setFormId] = useState("");
@@ -236,6 +251,31 @@ export function ProcessHostPanel({
         : null,
     [hostSnapshot.servers, inspectedServerId],
   );
+
+  const activeToolCallResult =
+    inspectedServer && lastToolCallResult?.server_id === inspectedServer.id
+      ? lastToolCallResult
+      : null;
+
+  async function handleTestCallTool(
+    serverId: string,
+    toolName: string,
+    argumentsJson: string,
+  ) {
+    if (!onCallTool) {
+      return;
+    }
+    const key = `${serverId}:${toolName}`;
+    setCallingToolKey(key);
+    try {
+      const result = await onCallTool(serverId, toolName, argumentsJson);
+      if (result) {
+        setLastToolCallResult(result);
+      }
+    } finally {
+      setCallingToolKey((prev) => (prev === key ? null : prev));
+    }
+  }
 
   function resetFormWithPreset(preset: "echo" | "filesystem" | "fetch" | "blank") {
     setFormError(null);
@@ -801,23 +841,112 @@ export function ProcessHostPanel({
 
                   <ScrollArea className="max-h-32 rounded-md border border-border-subtle bg-surface-sunken">
                     <div className="divide-y divide-border-subtle">
-                      {inspectedServer.discovered_tools.map((tool) => (
-                        <div
-                          key={tool.name}
-                          className="flex flex-col gap-0.5 px-3 py-2"
-                        >
-                          <span className="font-mono text-caption font-medium text-foreground">
-                            {tool.name}
-                          </span>
-                          {tool.description && (
-                            <span className="text-micro text-muted-foreground">
-                              {tool.description}
-                            </span>
-                          )}
-                        </div>
-                      ))}
+                      {inspectedServer.discovered_tools.map((tool) => {
+                        const isServerCalling = Boolean(
+                          callingServerIds?.[inspectedServer.id],
+                        );
+                        const isCurrentToolCalling =
+                          isServerCalling &&
+                          callingToolKey ===
+                            `${inspectedServer.id}:${tool.name}`;
+                        const canCallTool =
+                          inspectedServer.status === "running" &&
+                          Boolean(onCallTool);
+                        const defaultArgsJson =
+                          tool.name === "echo_stdio_probe"
+                            ? '{"text":"hello-keeldesk"}'
+                            : "{}";
+
+                        return (
+                          <div
+                            key={tool.name}
+                            className="flex items-center justify-between gap-2 px-3 py-2"
+                          >
+                            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                              <span className="truncate font-mono text-caption font-medium text-foreground">
+                                {tool.name}
+                              </span>
+                              {tool.description && (
+                                <span className="text-micro text-muted-foreground">
+                                  {tool.description}
+                                </span>
+                              )}
+                            </div>
+
+                            {canCallTool && (
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="outline"
+                                disabled={isServerCalling}
+                                onClick={() =>
+                                  void handleTestCallTool(
+                                    inspectedServer.id,
+                                    tool.name,
+                                    defaultArgsJson,
+                                  )
+                                }
+                              >
+                                <PlayIcon data-icon="inline-start" />
+                                {isCurrentToolCalling ? "调用中..." : "试调"}
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </ScrollArea>
+
+                  <div role="status" aria-live="polite" className="min-w-0">
+                    {activeToolCallResult && (
+                      <div
+                        className={cn(
+                          "flex flex-wrap items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-caption",
+                          activeToolCallResult.is_error
+                            ? "border-status-danger-border bg-status-danger-subtle text-foreground"
+                            : "border-status-ok-border bg-status-ok-subtle text-foreground",
+                        )}
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                          <StatusDot
+                            tone={
+                              activeToolCallResult.is_error ? "danger" : "ok"
+                            }
+                          />
+                          <span className="truncate font-mono text-micro text-foreground">
+                            {activeToolCallResult.tool_name}
+                          </span>
+                          <MetricPill
+                            tone={
+                              activeToolCallResult.is_error ? "danger" : "ok"
+                            }
+                          >
+                            {activeToolCallResult.is_error ? "Error" : "OK"} ·{" "}
+                            {activeToolCallResult.duration_ms} ms
+                          </MetricPill>
+                        </div>
+
+                        {activeToolCallResult.trace_seq !== null &&
+                          onInspectTraceSeq && (
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => {
+                                const seq = activeToolCallResult.trace_seq;
+                                if (seq !== null) {
+                                  setInspectedServerId(null);
+                                  onInspectTraceSeq(seq);
+                                }
+                              }}
+                              className="font-mono tabular-nums"
+                            >
+                              查看报文 #{activeToolCallResult.trace_seq}
+                            </Button>
+                          )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
