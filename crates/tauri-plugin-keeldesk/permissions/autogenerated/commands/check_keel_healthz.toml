@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-check-keel-healthz"
+description = "Enables the check_keel_healthz command without any pre-configured scope."
+commands.allow = ["check_keel_healthz"]
+
+[[permission]]
+identifier = "deny-check-keel-healthz"
+description = "Denies the check_keel_healthz command without any pre-configured scope."
+commands.deny = ["check_keel_healthz"]

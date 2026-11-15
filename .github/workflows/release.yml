@@ -30,17 +30,19 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Export Specta TypeScript bindings
+        run: pnpm bindings
 
       - name: Build and release Tauri bundles
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          projectPath: apps/env-workbench
           tagName: ${{ github.ref_name }}
           releaseName: "KeelDesk ${{ github.ref_name }}"
           releaseBody: "See [CHANGELOG.md](https://github.com/ZengLiangYi/KeelDesk/blob/main/CHANGELOG.md) for release notes."

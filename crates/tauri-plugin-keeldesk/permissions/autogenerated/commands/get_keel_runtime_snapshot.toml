@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-get-keel-runtime-snapshot"
+description = "Enables the get_keel_runtime_snapshot command without any pre-configured scope."
+commands.allow = ["get_keel_runtime_snapshot"]
+
+[[permission]]
+identifier = "deny-get-keel-runtime-snapshot"
+description = "Denies the get_keel_runtime_snapshot command without any pre-configured scope."
+commands.deny = ["get_keel_runtime_snapshot"]

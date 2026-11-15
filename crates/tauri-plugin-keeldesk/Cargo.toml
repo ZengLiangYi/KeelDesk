@@ -1,0 +1,26 @@
+[package]
+name = "tauri-plugin-keeldesk"
+description = "Tauri v2 plugin wrapping keeldesk-core for embedded Streamable HTTP MCP runtime and Windows 11 ODR/process-host telemetry"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+edition.workspace = true
+links = "tauri-plugin-keeldesk"
+
+# Unit tests in `lib` cannot receive `cargo:rustc-link-arg-tests` for the Windows
+# Common-Controls v6 manifest (`TaskDialogIndirect`), so plugin tests live in `tests/`.
+[lib]
+test = false
+
+[build-dependencies]
+tauri-plugin = { workspace = true }
+
+[dependencies]
+keeldesk-core = { path = "../keeldesk-core" }
+tauri = { workspace = true }
+serde = { workspace = true }
+specta = { workspace = true }
+specta-typescript = { workspace = true }
+tauri-specta = { workspace = true }

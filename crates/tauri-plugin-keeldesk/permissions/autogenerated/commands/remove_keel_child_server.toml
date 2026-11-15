@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-remove-keel-child-server"
+description = "Enables the remove_keel_child_server command without any pre-configured scope."
+commands.allow = ["remove_keel_child_server"]
+
+[[permission]]
+identifier = "deny-remove-keel-child-server"
+description = "Denies the remove_keel_child_server command without any pre-configured scope."
+commands.deny = ["remove_keel_child_server"]

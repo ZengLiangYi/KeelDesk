@@ -1,0 +1,46 @@
+{
+  "name": "@keeldesk/react",
+  "version": "0.1.0",
+  "description": "React 19 hooks and <KeelDevTools /> protocol inspector for the KeelDesk Windows 11 MCP runtime",
+  "author": "Leon Zeng",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@tauri-apps/api": "^2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.17.0",
+    "radix-ui": "^1.5.0",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "^2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "typescript": "~5.8.3"
+  }
+}

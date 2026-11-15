@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-export-keel-odr-manifest"
+description = "Enables the export_keel_odr_manifest command without any pre-configured scope."
+commands.allow = ["export_keel_odr_manifest"]
+
+[[permission]]
+identifier = "deny-export-keel-odr-manifest"
+description = "Denies the export_keel_odr_manifest command without any pre-configured scope."
+commands.deny = ["export_keel_odr_manifest"]

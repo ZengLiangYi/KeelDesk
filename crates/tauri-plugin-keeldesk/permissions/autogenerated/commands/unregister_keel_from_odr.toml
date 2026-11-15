@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-unregister-keel-from-odr"
+description = "Enables the unregister_keel_from_odr command without any pre-configured scope."
+commands.allow = ["unregister_keel_from_odr"]
+
+[[permission]]
+identifier = "deny-unregister-keel-from-odr"
+description = "Denies the unregister_keel_from_odr command without any pre-configured scope."
+commands.deny = ["unregister_keel_from_odr"]

@@ -1,0 +1,20 @@
+[default]
+description = "Default permissions for tauri-plugin-keeldesk local desktop MCP runtime commands"
+permissions = [
+  "allow-get-keel-runtime-snapshot",
+  "allow-self-test-keel-ping",
+  "allow-resolve-keel-tool-approval",
+  "allow-clear-keel-session-allowlist",
+  "allow-get-keel-odr-status",
+  "allow-register-keel-with-odr",
+  "allow-unregister-keel-from-odr",
+  "allow-export-keel-odr-manifest",
+  "allow-get-keel-process-host-snapshot",
+  "allow-start-keel-child-server",
+  "allow-stop-keel-child-server",
+  "allow-remove-keel-child-server",
+  "allow-check-keel-healthz",
+  "allow-get-keel-protocol-traces",
+  "allow-clear-keel-protocol-traces",
+  "allow-call-keel-child-server-tool",
+]

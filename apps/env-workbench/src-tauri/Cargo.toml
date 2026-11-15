@@ -1,0 +1,56 @@
+[package]
+name = "keeldesk"
+description = "Native Windows 11 desktop MCP runtime spine and developer environment workbench"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../../../README.md"
+edition.workspace = true
+default-run = "keeldesk"
+autobins = false
+
+[[bin]]
+name = "keeldesk"
+path = "src/main.rs"
+
+[[bin]]
+name = "export-bindings"
+path = "src/bin/export-bindings.rs"
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "keeldesk_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { workspace = true }
+
+[dependencies]
+keeldesk-core = { path = "../../../crates/keeldesk-core" }
+tauri-plugin-keeldesk = { path = "../../../crates/tauri-plugin-keeldesk" }
+tauri = { workspace = true, features = ["tray-icon"] }
+tauri-plugin-opener = { workspace = true }
+tauri-plugin-single-instance = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+specta = { workspace = true }
+specta-typescript = { workspace = true }
+tauri-specta = { workspace = true }
+rmcp = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+schemars = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Dwm",
+  "Win32_NetworkManagement_IpHelper",
+  "Win32_Networking_WinSock",
+  "Win32_System_Registry",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+] }

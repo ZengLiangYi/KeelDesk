@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-clear-keel-protocol-traces"
+description = "Enables the clear_keel_protocol_traces command without any pre-configured scope."
+commands.allow = ["clear_keel_protocol_traces"]
+
+[[permission]]
+identifier = "deny-clear-keel-protocol-traces"
+description = "Denies the clear_keel_protocol_traces command without any pre-configured scope."
+commands.deny = ["clear_keel_protocol_traces"]

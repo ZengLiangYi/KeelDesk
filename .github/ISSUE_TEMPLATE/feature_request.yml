@@ -23,8 +23,8 @@ body:
       label: Architectural Layer
       description: Which architectural layer does this proposal target?
       options:
-        - keel_core / keel-sdk Spine
-        - workbench App / Host Tool
+        - keeldesk-core / tauri-plugin-keeldesk / @keeldesk/react Spine
+        - env-workbench App / Host Tool
         - Design System / UI
         - Docs / CI
     validations:

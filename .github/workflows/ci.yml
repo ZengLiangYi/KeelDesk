@@ -38,26 +38,27 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Check Rust formatting
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+        run: cargo fmt --all -- --check
 
       - name: Run Clippy lints
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Export Specta TypeScript bindings
         run: pnpm bindings
 
-      - name: Verify src/bindings.ts has no uncommitted drift
-        run: git diff --exit-code -- src/bindings.ts
+      - name: Verify generated TypeScript bindings have no uncommitted drift
+        run: git diff --exit-code -- packages/react/src/bindings.ts apps/env-workbench/src/bindings.ts
 
-      - name: Build frontend
+      - name: Typecheck frontend packages
+        run: pnpm typecheck
+
+      - name: Build frontend packages
         run: pnpm build
 
-      - name: Run Rust test suite
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Run Rust workspace test suite
+        run: cargo test --workspace

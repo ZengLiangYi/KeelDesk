@@ -1,0 +1,31 @@
+[package]
+name = "keeldesk-core"
+description = "Pure Rust embedded Streamable HTTP MCP runtime spine, approval gate, Win11 ODR integration, and child process host"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+edition.workspace = true
+
+[dependencies]
+rmcp = { workspace = true }
+axum = { workspace = true }
+http = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+specta = { workspace = true }
+chrono = { workspace = true }
+schemars = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_Registry",
+  "Win32_System_Threading",
+] }

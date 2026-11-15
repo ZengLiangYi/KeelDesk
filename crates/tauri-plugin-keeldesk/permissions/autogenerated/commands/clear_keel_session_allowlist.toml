@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-clear-keel-session-allowlist"
+description = "Enables the clear_keel_session_allowlist command without any pre-configured scope."
+commands.allow = ["clear_keel_session_allowlist"]
+
+[[permission]]
+identifier = "deny-clear-keel-session-allowlist"
+description = "Denies the clear_keel_session_allowlist command without any pre-configured scope."
+commands.deny = ["clear_keel_session_allowlist"]

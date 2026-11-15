@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-self-test-keel-ping"
+description = "Enables the self_test_keel_ping command without any pre-configured scope."
+commands.allow = ["self_test_keel_ping"]
+
+[[permission]]
+identifier = "deny-self-test-keel-ping"
+description = "Denies the self_test_keel_ping command without any pre-configured scope."
+commands.deny = ["self_test_keel_ping"]

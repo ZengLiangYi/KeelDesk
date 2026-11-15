@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-get-keel-odr-status"
+description = "Enables the get_keel_odr_status command without any pre-configured scope."
+commands.allow = ["get_keel_odr_status"]
+
+[[permission]]
+identifier = "deny-get-keel-odr-status"
+description = "Denies the get_keel_odr_status command without any pre-configured scope."
+commands.deny = ["get_keel_odr_status"]

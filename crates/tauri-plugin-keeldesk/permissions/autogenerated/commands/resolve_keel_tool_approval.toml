@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-resolve-keel-tool-approval"
+description = "Enables the resolve_keel_tool_approval command without any pre-configured scope."
+commands.allow = ["resolve_keel_tool_approval"]
+
+[[permission]]
+identifier = "deny-resolve-keel-tool-approval"
+description = "Denies the resolve_keel_tool_approval command without any pre-configured scope."
+commands.deny = ["resolve_keel_tool_approval"]
