@@ -32,6 +32,8 @@ use super::{
 };
 
 const MAX_RECENT_CALL_LOGS: usize = 32;
+pub(crate) const KEEL_MCP_INSTRUCTIONS: &str =
+    "KeelDesk Windows 11 local desktop MCP spine. Use `keel_ping` to verify connectivity.";
 
 pub type SnapshotNotifier = Arc<dyn Fn(KeelRuntimeSnapshot) + Send + Sync>;
 pub type ApprovalNotifier = Arc<dyn Fn(PendingToolApproval) + Send + Sync>;
@@ -59,6 +61,7 @@ struct MutableRuntimeMetrics {
 pub struct KeelSharedState {
     pub config: KeelConfig,
     tools_meta: Vec<KeelToolDescriptor>,
+    mcp_tools: Vec<Tool>,
     metrics: RwLock<MutableRuntimeMetrics>,
     notifier: Option<SnapshotNotifier>,
     approval_notifier: Option<ApprovalNotifier>,
@@ -68,6 +71,7 @@ impl KeelSharedState {
     pub fn new(
         config: KeelConfig,
         tools_meta: Vec<KeelToolDescriptor>,
+        mcp_tools: Vec<Tool>,
         notifier: Option<SnapshotNotifier>,
         approval_notifier: Option<ApprovalNotifier>,
     ) -> Self {
@@ -75,6 +79,7 @@ impl KeelSharedState {
         Self {
             config,
             tools_meta,
+            mcp_tools,
             metrics: RwLock::new(MutableRuntimeMetrics {
                 status: KeelServerStatus::Starting,
                 bound_port: initial_port,
@@ -90,6 +95,10 @@ impl KeelSharedState {
             notifier,
             approval_notifier,
         }
+    }
+
+    pub fn mcp_tools(&self) -> &[Tool] {
+        &self.mcp_tools
     }
 
     pub fn mark_running(&self, bound_port: u16) {
@@ -498,12 +507,24 @@ impl KeelMcpServer {
 
 impl KeelMcpServer {
     pub fn new(shared: Arc<KeelSharedState>, extra_router: ToolRouter<Self>) -> Self {
-        let mut router = Self::tool_router();
-        router.merge(extra_router);
+        let tool_router = Self::merged_tool_router(extra_router);
         Self {
             shared,
-            tool_router: router,
+            tool_router,
         }
+    }
+
+    pub(crate) fn from_router(shared: Arc<KeelSharedState>, tool_router: ToolRouter<Self>) -> Self {
+        Self {
+            shared,
+            tool_router,
+        }
+    }
+
+    pub(crate) fn merged_tool_router(extra_router: ToolRouter<Self>) -> ToolRouter<Self> {
+        let mut router = Self::tool_router();
+        router.merge(extra_router);
+        router
     }
 
     pub fn builtin_tool_descriptors() -> Vec<KeelToolDescriptor> {
@@ -597,9 +618,7 @@ impl ServerHandler for KeelMcpServer {
 
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(server_info)
-            .with_instructions(
-                "KeelDesk Windows 11 local desktop MCP spine. Use `keel_ping` to verify connectivity.",
-            )
+            .with_instructions(KEEL_MCP_INSTRUCTIONS)
     }
 
     async fn list_tools(

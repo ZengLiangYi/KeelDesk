@@ -9,6 +9,14 @@ export const commands = {
 	selfTestKeelPing: (message: string | null) => typedError<KeelPingSelfTestResult, string>(__TAURI_INVOKE("self_test_keel_ping", { message })),
 	resolveKeelToolApproval: (requestId: string, decision: ToolApprovalDecision) => typedError<PendingToolApproval, string>(__TAURI_INVOKE("resolve_keel_tool_approval", { requestId, decision })),
 	clearKeelSessionAllowlist: () => typedError<KeelRuntimeSnapshot, string>(__TAURI_INVOKE("clear_keel_session_allowlist")),
+	getKeelOdrStatus: () => typedError<OdrStatusReport, string>(__TAURI_INVOKE("get_keel_odr_status")),
+	registerKeelWithOdr: (mode: OdrRegisterMode) => typedError<OdrActionOutcome, string>(__TAURI_INVOKE("register_keel_with_odr", { mode })),
+	unregisterKeelFromOdr: (serverId: string | null) => typedError<OdrActionOutcome, string>(__TAURI_INVOKE("unregister_keel_from_odr", { serverId })),
+	exportKeelOdrManifest: (targetPath: string | null) => typedError<OdrActionOutcome, string>(__TAURI_INVOKE("export_keel_odr_manifest", { targetPath })),
+	getKeelProcessHostSnapshot: () => typedError<ProcessHostSnapshot, string>(__TAURI_INVOKE("get_keel_process_host_snapshot")),
+	startKeelChildServer: (spec: SpawnChildServerSpec) => typedError<ChildServerRecord, string>(__TAURI_INVOKE("start_keel_child_server", { spec })),
+	stopKeelChildServer: (serverId: string) => typedError<ChildServerRecord, string>(__TAURI_INVOKE("stop_keel_child_server", { serverId })),
+	removeKeelChildServer: (serverId: string) => typedError<ProcessHostSnapshot, string>(__TAURI_INVOKE("remove_keel_child_server", { serverId })),
 	getWin11HostSummary: () => __TAURI_INVOKE<Win11HostSummary>("get_win11_host_summary"),
 	scanWin11DevEnv: () => typedError<DevEnvScanReport, string>(__TAURI_INVOKE("scan_win11_dev_env")),
 	listWin11ActivePorts: (port: number | null, processFilter: string | null) => typedError<ActivePortReport, string>(__TAURI_INVOKE("list_win11_active_ports", { port, processFilter })),
@@ -18,6 +26,7 @@ export const commands = {
 /** Events */
 export const events = {
 	keelRuntimeUpdatedEvent: makeEvent<KeelRuntimeUpdatedEvent>("keel-runtime-updated-event"),
+	processHostUpdatedEvent: makeEvent<ProcessHostUpdatedEvent>("process-host-updated-event"),
 	toolApprovalRequestedEvent: makeEvent<ToolApprovalRequestedEvent>("tool-approval-requested-event"),
 };
 
@@ -38,6 +47,41 @@ export type ActivePortReport = {
 	total_listening: number,
 	entries: ActivePortEntry[],
 };
+
+export type ChildEnvVar = {
+	key: string,
+	value: string,
+};
+
+export type ChildMcpToolSummary = {
+	name: string,
+	description: string,
+};
+
+export type ChildServerRecord = {
+	id: string,
+	name: string,
+	command: string,
+	resolved_executable: string | null,
+	args: string[],
+	cwd: string | null,
+	env_keys: string[],
+	perform_mcp_handshake: boolean,
+	status: ChildServerStatus,
+	pid: number | null,
+	job_object_attached: boolean,
+	started_at_iso: string | null,
+	stopped_at_iso: string | null,
+	last_exit_code: number | null,
+	last_error: string | null,
+	server_info_name: string | null,
+	server_info_version: string | null,
+	handshake_ms: number | null,
+	discovered_tools: ChildMcpToolSummary[],
+	stderr_tail: string[],
+};
+
+export type ChildServerStatus = "stopped" | "starting" | "running" | "failed";
 
 export type DevEnvScanReport = {
 	scanned_at_iso: string,
@@ -107,6 +151,52 @@ export type KillPortProcessResult = {
 	message: string,
 };
 
+export type OdrActionOutcome = {
+	executed_cli: boolean,
+	succeeded: boolean,
+	mode: string,
+	command_line: string,
+	exported_manifest_path: string | null,
+	stdout: string | null,
+	stderr: string | null,
+	message: string,
+	status: OdrStatusReport,
+};
+
+export type OdrEnrolledServer = {
+	identifier: string,
+	display_line: string,
+	matches_keel: boolean,
+};
+
+export type OdrReadinessState = "ready" | "missing_odr_cli" | "unsupported_os";
+
+export type OdrRegisterMode = "uri" | "manifest";
+
+export type OdrStatusReport = {
+	probed_at_iso: string,
+	readiness: OdrReadinessState,
+	is_windows_11: boolean,
+	os_build: number,
+	os_ubr: number,
+	display_version: string,
+	meets_odr_build_hint: boolean,
+	developer_mode_enabled: boolean,
+	odr_installed: boolean,
+	odr_binary_path: string | null,
+	odr_version: string | null,
+	keel_enrolled: boolean,
+	enrolled_servers: OdrEnrolledServer[],
+	raw_list_output: string | null,
+	uri_register_command: string,
+	manifest_register_command: string,
+	unregister_command: string,
+	list_command: string,
+	default_manifest_path: string,
+	manifest_json: string,
+	guidance_message: string,
+};
+
 export type PendingToolApproval = {
 	request_id: string,
 	tool_name: string,
@@ -120,10 +210,28 @@ export type PendingToolApproval = {
 	timeout_secs: number,
 };
 
+export type ProcessHostSnapshot = {
+	merged_path_entries: number,
+	running_count: number,
+	servers: ChildServerRecord[],
+};
+
+export type ProcessHostUpdatedEvent = ProcessHostSnapshot;
+
 export type SessionAllowlistEntry = {
 	session_scope: string,
 	tool_name: string,
 	granted_at_iso: string,
+};
+
+export type SpawnChildServerSpec = {
+	id: string,
+	name: string,
+	command: string,
+	args?: string[],
+	cwd?: string | null,
+	env?: ChildEnvVar[],
+	perform_mcp_handshake?: boolean,
 };
 
 export type ToolApprovalDecision = "approve_once" | "approve_for_session" | "deny";

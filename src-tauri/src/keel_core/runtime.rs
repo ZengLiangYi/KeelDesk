@@ -25,15 +25,24 @@ use super::{
     mcp_server::{
         ApprovalNotifier, KeelMcpServer, KeelSharedState, KeelToolRegistry, SnapshotNotifier,
     },
+    process_host::{
+        ChildServerRecord, KeelProcessHost, ProcessHostNotifier, ProcessHostSnapshot,
+        ProcessHostUpdatedEvent, SpawnChildServerSpec,
+    },
     types::{
         KeelPingPayload, KeelPingSelfTestResult, KeelRuntimeSnapshot, KeelRuntimeUpdatedEvent,
         KeelServerStatus, PendingToolApproval, ToolApprovalDecision, ToolApprovalRequestedEvent,
+    },
+    win_odr::{
+        export_manifest, probe_odr_status, register_with_odr, unregister_from_odr,
+        OdrActionOutcome, OdrRegisterMode, OdrStatusReport,
     },
 };
 
 #[derive(Clone)]
 pub struct KeelRuntime {
     shared: Arc<KeelSharedState>,
+    process_host: Arc<KeelProcessHost>,
     shutdown_token: CancellationToken,
     ready_notify: Arc<Notify>,
 }
@@ -47,6 +56,11 @@ impl KeelRuntime {
         let snapshot_app = app_handle.clone();
         let notifier: SnapshotNotifier = Arc::new(move |snapshot| {
             let _ = KeelRuntimeUpdatedEvent(snapshot).emit(&snapshot_app);
+        });
+
+        let process_host_app = app_handle.clone();
+        let process_host_notifier: ProcessHostNotifier = Arc::new(move |snapshot| {
+            let _ = ProcessHostUpdatedEvent(snapshot).emit(&process_host_app);
         });
 
         let approval_app = app_handle;
@@ -65,13 +79,14 @@ impl KeelRuntime {
             registry,
             Some(notifier),
             Some(approval_notifier),
+            Some(process_host_notifier),
             true,
         )
     }
 
     #[cfg(test)]
     pub fn start_headless(config: KeelConfig, registry: KeelToolRegistry) -> Self {
-        Self::start_internal(config, registry, None, None, false)
+        Self::start_internal(config, registry, None, None, None, false)
     }
 
     #[cfg(test)]
@@ -80,7 +95,7 @@ impl KeelRuntime {
         registry: KeelToolRegistry,
         approval_notifier: ApprovalNotifier,
     ) -> Self {
-        Self::start_internal(config, registry, None, Some(approval_notifier), false)
+        Self::start_internal(config, registry, None, Some(approval_notifier), None, false)
     }
 
     fn start_internal(
@@ -88,22 +103,28 @@ impl KeelRuntime {
         registry: KeelToolRegistry,
         notifier: Option<SnapshotNotifier>,
         approval_notifier: Option<ApprovalNotifier>,
+        process_host_notifier: Option<ProcessHostNotifier>,
         use_tauri_runtime: bool,
     ) -> Self {
         let (extra_router, extra_descriptors) = registry.into_parts();
         let mut all_descriptors = KeelMcpServer::builtin_tool_descriptors();
         all_descriptors.extend(extra_descriptors);
 
+        let full_router = KeelMcpServer::merged_tool_router(extra_router);
+        let mcp_tools = full_router.list_all();
+
         let shared = Arc::new(KeelSharedState::new(
             config.clone(),
             all_descriptors,
+            mcp_tools,
             notifier,
             approval_notifier,
         ));
+        let process_host = Arc::new(KeelProcessHost::new(process_host_notifier));
         let shutdown_token = CancellationToken::new();
         let ready_notify = Arc::new(Notify::new());
 
-        let server_prototype = KeelMcpServer::new(shared.clone(), extra_router);
+        let server_prototype = KeelMcpServer::from_router(shared.clone(), full_router);
         let task_shared = shared.clone();
         let task_token = shutdown_token.clone();
         let task_ready = ready_notify.clone();
@@ -185,6 +206,7 @@ impl KeelRuntime {
 
         Self {
             shared,
+            process_host,
             shutdown_token,
             ready_notify,
         }
@@ -206,7 +228,49 @@ impl KeelRuntime {
         self.shared.clear_session_allowlist()
     }
 
+    pub async fn odr_status(&self) -> OdrStatusReport {
+        probe_odr_status(&self.shared).await
+    }
+
+    pub async fn register_with_odr(&self, mode: OdrRegisterMode) -> OdrActionOutcome {
+        register_with_odr(&self.shared, mode).await
+    }
+
+    pub async fn unregister_from_odr(&self, server_id: Option<String>) -> OdrActionOutcome {
+        unregister_from_odr(&self.shared, server_id).await
+    }
+
+    pub async fn export_odr_manifest(
+        &self,
+        target_path: Option<String>,
+    ) -> Result<OdrActionOutcome, String> {
+        export_manifest(&self.shared, target_path).await
+    }
+
+    pub fn process_host_snapshot(&self) -> ProcessHostSnapshot {
+        self.process_host.snapshot()
+    }
+
+    pub async fn start_child_server(
+        &self,
+        spec: SpawnChildServerSpec,
+    ) -> Result<ChildServerRecord, String> {
+        self.process_host.start_server(spec).await
+    }
+
+    pub async fn stop_child_server(&self, server_id: &str) -> Result<ChildServerRecord, String> {
+        self.process_host.stop_server(server_id).await
+    }
+
+    pub async fn remove_child_server(
+        &self,
+        server_id: &str,
+    ) -> Result<ProcessHostSnapshot, String> {
+        self.process_host.remove_server(server_id).await
+    }
+
     pub fn shutdown(&self) {
+        self.process_host.shutdown_all();
         self.shared.mark_stopped();
         self.shutdown_token.cancel();
     }

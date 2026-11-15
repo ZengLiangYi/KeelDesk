@@ -17,6 +17,14 @@ fn specta_builder() -> Builder<tauri::Wry> {
             keel_core::commands::self_test_keel_ping,
             keel_core::commands::resolve_keel_tool_approval,
             keel_core::commands::clear_keel_session_allowlist,
+            keel_core::commands::get_keel_odr_status,
+            keel_core::commands::register_keel_with_odr,
+            keel_core::commands::unregister_keel_from_odr,
+            keel_core::commands::export_keel_odr_manifest,
+            keel_core::commands::get_keel_process_host_snapshot,
+            keel_core::commands::start_keel_child_server,
+            keel_core::commands::stop_keel_child_server,
+            keel_core::commands::remove_keel_child_server,
             workbench::get_win11_host_summary,
             workbench::scan_win11_dev_env,
             workbench::list_win11_active_ports,
@@ -25,6 +33,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         .events(collect_events![
             keel_core::KeelRuntimeUpdatedEvent,
             keel_core::ToolApprovalRequestedEvent,
+            keel_core::ProcessHostUpdatedEvent,
         ])
 }
 
