@@ -14,7 +14,7 @@ Software engineers, AI agent builders, and power developers running Windows 11 (
 
 ## Product Purpose
 
-KeelDesk provides a single-instance Windows 11 system-tray MCP (Model Context Protocol) runtime spine paired with a local developer environment workbench. It exposes trusted host inspection and port governance tools over loopback Streamable HTTP while gating destructive actions behind real-time human-in-the-loop desktop confirmation. Success means background invisibility during routine Safe queries and immediate, unmistakable clarity when an external agent requests a privileged operation.
+KeelDesk provides a single-instance Windows 11 system-tray MCP (Model Context Protocol) runtime spine paired with a local developer environment workbench. Organized as a decoupled Cargo + `pnpm` workspace monorepo (`keeldesk-core`, `tauri-plugin-keeldesk`, `@keeldesk/react`, and `env-workbench`), it exposes trusted host inspection and port governance tools over loopback Streamable HTTP, integrates with Windows 11 ODR (`odr.exe`), hosts supervised child stdio MCP servers, and inspects live JSON-RPC traffic via `<KeelDevTools />` while gating destructive actions behind real-time human-in-the-loop desktop confirmation. Success means background invisibility during routine Safe queries and immediate, unmistakable clarity when an external agent requests a privileged operation.
 
 ## Positioning
 

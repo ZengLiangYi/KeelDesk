@@ -1,6 +1,6 @@
 //! Business layer: Windows 11 local environment management workbench.
 //!
-//! Consumes `keel_core` without `keel_core` depending back on `workbench`.
+//! Consumes `keeldesk_core` without `keeldesk_core` depending back on `workbench`.
 
 pub mod dev_env;
 pub mod ports;

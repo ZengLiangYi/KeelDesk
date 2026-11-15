@@ -113,6 +113,15 @@ claude mcp add --transport http keeldesk http://127.0.0.1:19527/mcp
 Invoke-RestMethod -Uri "http://127.0.0.1:19527/healthz"
 ```
 
+## Workspace Packages
+
+| Package | Path | Layer | Description |
+| :--- | :--- | :--- | :--- |
+| **`keeldesk-core`** | [`crates/keeldesk-core`](crates/keeldesk-core/README.md) | Spine (Rust) | Pure Rust embedded Streamable HTTP MCP server, `ConfirmRequired` approval gate, Win11 ODR integration, supervised child MCP process host, and protocol trace store (zero `tauri` deps). |
+| **`tauri-plugin-keeldesk`** | [`crates/tauri-plugin-keeldesk`](crates/tauri-plugin-keeldesk/README.md) | Spine (Tauri v2) | Standard Tauri v2 plugin (`plugin:keeldesk`) providing capability permissions, `tauri-specta` commands/events, tray wakeup, and graceful exit shutdown. |
+| **`@keeldesk/react`** | [`packages/react`](packages/react/README.md) | Spine (React 19) | Standalone React 19 SDK hooks (`useMcpServerState`, `useToolApproval`, `useExternalMcpClients`, `useWinOdr`, `useKeelDevTools`) and `<KeelDevTools />` inspector drawer. |
+| **`@keeldesk/env-workbench`** | [`apps/env-workbench`](apps/env-workbench/README.md) | App (Desktop) | Windows 11 developer environment & port governance workbench built on `keeldesk-core`, `tauri-plugin-keeldesk`, and `@keeldesk/react`. |
+
 ## Project Structure
 
 ```text

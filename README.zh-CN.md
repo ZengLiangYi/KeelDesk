@@ -113,6 +113,15 @@ claude mcp add --transport http keeldesk http://127.0.0.1:19527/mcp
 Invoke-RestMethod -Uri "http://127.0.0.1:19527/healthz"
 ```
 
+## 工作空间模块
+
+| 模块名 | 路径 | 分层 | 职责说明 |
+| :--- | :--- | :--- | :--- |
+| **`keeldesk-core`** | [`crates/keeldesk-core`](crates/keeldesk-core/README.md) | 运行底座 (Rust) | 纯 Rust 内嵌 Streamable HTTP MCP 服务端、`ConfirmRequired` 审批网关、Win11 ODR 集成、受控子进程宿主与协议追踪存储（零 `tauri` 依赖）。 |
+| **`tauri-plugin-keeldesk`** | [`crates/tauri-plugin-keeldesk`](crates/tauri-plugin-keeldesk/README.md) | 运行底座 (Tauri v2) | 标准 Tauri v2 插件（`plugin:keeldesk`），提供权限声明、`tauri-specta` 强类型命令/事件、托盘窗口唤醒与停机回收。 |
+| **`@keeldesk/react`** | [`packages/react`](packages/react/README.md) | 运行底座 (React 19) | 独立编译的 React 19 SDK Hooks（`useMcpServerState`、`useToolApproval`、`useExternalMcpClients`、`useWinOdr`、`useKeelDevTools`）与 `<KeelDevTools />` 调试抽屉。 |
+| **`@keeldesk/env-workbench`** | [`apps/env-workbench`](apps/env-workbench/README.md) | 桌面应用 (App) | 基于上述运行底座构建的 Windows 11 本机开发环境与端口治理工作台。 |
+
 ## 目录结构
 
 ```text

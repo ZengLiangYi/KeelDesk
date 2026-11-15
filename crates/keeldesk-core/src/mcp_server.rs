@@ -612,8 +612,8 @@ impl Drop for PendingApprovalDropGuard {
     }
 }
 
-/// Registry enabling external business modules (such as `workbench`) to attach
-/// MCP tools with explicit safety metadata without `keel_core` depending on them.
+/// Registry enabling host applications to attach external MCP tools with
+/// explicit safety metadata without `keeldesk_core` depending on them.
 #[derive(Default, Clone)]
 pub struct KeelToolRegistry {
     router: ToolRouter<KeelMcpServer>,
