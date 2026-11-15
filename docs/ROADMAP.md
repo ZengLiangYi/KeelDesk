@@ -68,16 +68,23 @@
 
 ---
 
-### ⏳ Phase 3: Windows 11 Native ODR & Process Host
+### ✅ Phase 3: Windows 11 Native ODR & Process Host
 
 - **Goal**: Integrate with the Windows 11 On-Device Agent Registry ecosystem and eliminate console flashes or orphaned child trees when hosting third-party MCP servers.
-- **Planned Scope**:
-  1. **`keel_core::win_odr` Module**:
-     - Detect Windows 11 build capabilities, Developer Mode status, and system `odr.exe` availability.
-     - Register/unregister KeelDesk MCP manifests in the Windows On-Device Agent Registry with clean fallback to standard client config exports when unavailable.
-  2. **`keel_core::process_host` Child Process Supervisor**:
-     - Spawn external `npx` / `uvx` / `.cmd` MCP servers with `CREATE_NO_WINDOW` (`0x08000000`) and full user-level `PATH` propagation.
-     - Bind child processes to a **Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`)** so the entire process tree is reclaimed by the kernel if KeelDesk exits or crashes.
+- **Delivered**:
+  1. **`keel_core::win32_env` Shared Win32 Environment Helpers**:
+     - [x] Merged `HKLM`/`HKCU` Registry `PATH` reconstruction (`build_merged_windows_path`) with `PATHEXT` executable resolution (`resolve_executable_in_path`).
+     - [x] `CREATE_NO_WINDOW` (`0x08000000`) subprocess builder, Windows 11 build/UBR/Developer Mode Registry probing (`Win11OdrHostProfile`), and UTF-8/UTF-16LE/GBK CLI output decoding.
+  2. **`keel_core::win_odr` Windows 11 ODR Integration**:
+     - [x] Probes OS build (`>= 22000`, `26220.7262+` hint), Developer Mode, and `odr.exe` availability & version (`OdrStatusReport`), plus enrolled server listing.
+     - [x] Supports URI (`odr.exe mcp add --uri ...`) and manifest registration/unregistration, plus live MCPB `"0.3"` manifest generation (`_meta["com.microsoft.windows"].static_responses`) with local JSON export fallback (`%LOCALAPPDATA%\KeelDesk\odr\keeldesk.mcpb.manifest.json`).
+  3. **`keel_core::process_host` Supervised Child MCP Process Host**:
+     - [x] Spawns external stdio MCP servers (`npx`, `uvx`, `.cmd`, executables) with `CREATE_NO_WINDOW`, merged Registry `PATH`, and optional working directory / environment variables (exposed strictly as redacted `env_keys`).
+     - [x] Binds every child server to a **Win32 Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`)** and runs clean shutdown reclamation when KeelDesk stops or exits.
+     - [x] Performs live `rmcp` stdio client handshake (`initialize` + `list_tools`) to record `server_info_*`, `handshake_ms`, `discovered_tools`, and bounded `stderr_tail` diagnostics.
+  4. **Frontend SDK & Workbench UI (`keel-sdk` & `components/`)**:
+     - [x] `useWinOdr` and `useProcessHost` React hooks consuming generated `tauri-specta` commands and `ProcessHostUpdatedEvent`.
+     - [x] `Windows ODR` snippet tab, `OdrManifestSheet` side sheet, and `ProcessHostPanel` (spawn dialog, built-in echo probe preset, live status table, and discovered tools / `stderr_tail` inspection sheet).
 
 ---
 

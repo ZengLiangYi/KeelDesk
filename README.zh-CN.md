@@ -38,6 +38,8 @@
 - **本地回环 DNS Rebinding 防护**：仅绑定 `127.0.0.1` 并严格校验 `Host` 与 `Origin` 白名单，阻断跨站 DNS Rebinding 请求。
 - **人机协同 `ConfirmRequired` 审批网关**：高危 MCP 工具调用会自动挂起在 `tokio::sync::oneshot` 通道上；若主窗口隐藏于托盘，将自动唤醒聚焦并弹出 `AlertDialog` 人工确认弹窗，支持 **单次放行**、**当前会话免审白名单**、**主动拒绝**、调用方取消即刻回收（`RequestContext.ct`）以及超时自动拦截（默认 `60s`）。
 - **Windows 11 原生宿主探测工具集**：使用 `CREATE_NO_WINDOW` 并发探测本机开发工具链（无控制台黑框闪烁），并通过 Win32 `GetExtendedTcpTable` 与 `QueryFullProcessImageNameW` 毫秒级枚举 TCPv4/TCPv6 监听端口与完整进程路径。
+- **Windows 11 On-Device Agent Registry (`odr.exe`) 集成**：探测 OS 构建号、开发者模式与 `odr.exe` 就绪状态，支持一键 URI / 清单注册（`odr.exe mcp add`），并实时生成包含 `_meta["com.microsoft.windows"].static_responses` 的 MCPB `"0.3"` 清单以供检视或回退导出。
+- **受控 Stdio 子进程 MCP 托管（Process Host）**：基于 `CREATE_NO_WINDOW`、合并 `HKLM`/`HKCU` 注册表 `PATH` 解析、Win32 Job Object（`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`）进程树回收机制拉起外部 `npx`/`uvx`/`.cmd`/可执行文件子进程，内置 `rmcp` stdio 握手与工具发现、脱敏 `env_keys` 展示及有界 `stderr_tail` 日志采集。
 - **端到端回环自检与安全演练**：基于 Windows 原生 SChannel TLS（`reqwest` `native-tls`）内置一键 `keel_ping` 连通性自检与 `kill_port_process`（`dry_run: true`）高危审批全链路演练。
 - **The Graphite Spine 设计系统**：保留真实 Windows 11 原生窗口边框与标题栏（`decorations: true`，`DWMWA_CAPTION_COLOR` 像素锁定 `#111116`），配备 `100dvh` 零整页滚动条受限视口、`ScrollArea` 内置滚动、六阶桌面排版体系、`4px` 间距网格与 `12px` 垂直基准线、同心 `2px` 圆角层级及 Windows 高对比度（`forced-colors`）适配。规范详情见 [`PRODUCT.md`](PRODUCT.md)、[`DESIGN.md`](DESIGN.md) 与 [`AGENTS.md`](AGENTS.md)。
 
@@ -119,19 +121,28 @@ KeelDesk/
 │   └── ROADMAP.zh-CN.md               # 架构分层与 Phase 1–5 演进路线图（简体中文）
 ├── src-tauri/
 │   └── src/
-│       ├── keel_core/                 # 运行底座：MCP HTTP 服务、审批网关、工具注册表与回环客户端
+│       ├── keel_core/                 # 运行底座：MCP HTTP 服务、审批网关、Win11 ODR 与子进程托管
+│       │   ├── win32_env.rs           # Win32 注册表 PATH 合并、CREATE_NO_WINDOW 与 CLI 解码辅助
+│       │   ├── win_odr.rs             # Windows 11 odr.exe 探测、注册与 MCPB "0.3" 清单导出
+│       │   └── process_host.rs        # 受控 stdio 子进程 MCP 宿主（Job Object 回收与 rmcp 握手）
 │       ├── workbench/                 # 工作台业务：Win11 工具链无黑框探测、Win32 端口治理与宿主摘要
 │       ├── bin/export-bindings.rs     # tauri-specta TypeScript 绑定导出二进制入口
 │       ├── win11.rs                   # Win32 DWM 暗色标题栏主题与注册表版本识别
 │       ├── tray.rs                    # 系统托盘菜单与后台常驻生命周期管理
 │       └── lib.rs                     # 单实例守护装配与 Specta 命令/事件注册
 └── src/
-    ├── keel-sdk/                      # 前端 SDK：useKeelRuntime 与 useToolApproval 状态 Hooks
+    ├── keel-sdk/                      # 前端 SDK：运行时、审批、ODR 与子进程托管 Hooks
+    │   ├── useKeelRuntime.ts          # 内嵌 MCP 服务状态与回环自检 Hook
+    │   ├── useToolApproval.ts         # ConfirmRequired 审批队列与演练 Hook
+    │   ├── useWinOdr.ts               # Windows 11 ODR 状态探测、注册与清单导出 Hook
+    │   └── useProcessHost.ts          # 受控子进程 MCP 生命周期控制与遥测 Hook
     ├── styles/tokens.css              # 单轨暗色石墨 Token 与排版工具类
     ├── components/
     │   ├── ui/                        # shadcn/ui (radix-nova) 基础组件
     │   ├── ds/                        # KeelDesk 领域设计系统组件
     │   ├── ToolApprovalDialog.tsx     # ConfirmRequired 交互式桌面人工审批弹窗
+    │   ├── OdrManifestSheet.tsx       # Windows 11 ODR 就绪状态、注册与 MCPB "0.3" 清单抽屉
+    │   ├── ProcessHostPanel.tsx       # 受控 stdio 子进程托管列表与工具/stderr 检视抽屉
     │   ├── PortsGovernancePanel.tsx   # Win32 监听端口检索与审批演练面板
     │   ├── DevEnvPanel.tsx            # Windows 11 本机开发工具链探测面板
     │   └── WorkbenchSkeleton.tsx      # Stage 2 React 同构骨架屏
@@ -148,7 +159,7 @@ KeelDesk/
 | **Phase 1 — Runtime Spine** | `keel_core` 与 `workbench` 单向解耦、单实例托盘常驻、内嵌 Streamable HTTP MCP 服务端与 Windows 11 原生工作台 | ✅ 已完成 |
 | **Phase 2 — Host Tools & Approval Gate** | 本机开发环境与 Win32 端口治理工具，以及托盘唤醒级 `ConfirmRequired` 人机协同审批闭环 | ✅ 已完成 |
 | **Design System — The Graphite Spine** | 暗色 DWM 像素锁定 Token、六阶桌面排版、`12px` 垂直基准线、同心圆角、`ui/` + `ds/` 分层与双阶段骨架屏 | ✅ 已完成 |
-| **Phase 3 — Windows 11 ODR & Process Host** | Windows 原生 Agent Registry（`odr.exe`）注册集成与 `CREATE_NO_WINDOW` + Job Object 子进程 MCP 托管 | ⏳ 进行中 |
+| **Phase 3 — Windows 11 ODR & Process Host** | Windows 原生 Agent Registry（`odr.exe`）注册与 MCPB `"0.3"` 清单生成，以及 `CREATE_NO_WINDOW` + Job Object 子进程 MCP 托管 | ✅ 已完成 |
 | **Phase 4 — React SDK & DevTools** | 标准化 `useMcpServerState`、`useToolApproval`、`useExternalMcpClients` 与 `<KeelDevTools />` 报文调试抽屉 | 📋 规划中 |
 | **Phase 5 — Workspace Modularization** | Cargo Workspace + `pnpm` Monorepo 模块化拆分，独立发布核心 Crates、React SDK 与工作台应用 | 📋 规划中 |
 

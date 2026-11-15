@@ -38,6 +38,8 @@
 - **Loopback DNS-Rebinding Defense**: Binds exclusively to `127.0.0.1` and enforces strict `Host` and `Origin` allowlists to block cross-site DNS-rebinding attempts.
 - **Human-in-the-Loop `ConfirmRequired` Approval Gate**: Privileged MCP calls suspend cleanly on a `tokio::sync::oneshot` channel. If KeelDesk is minimized to the tray, it wakes and focuses the main window to surface an `AlertDialog` confirmation prompt supporting **Approve Once**, **Allow Session** allowlisting, **Deny**, immediate caller-cancellation cleanup (`RequestContext.ct`), and automatic timeout rejection (`60s` default).
 - **Windows 11 Native Host Inspection**: Launches toolchain probes concurrently with `CREATE_NO_WINDOW` (zero console flash) and enumerates listening TCPv4/TCPv6 ports and full executable paths via Win32 `GetExtendedTcpTable` and `QueryFullProcessImageNameW`.
+- **Windows 11 On-Device Agent Registry (`odr.exe`)**: Probes OS build, Developer Mode, and `odr.exe` readiness, supports one-click URI or manifest enrollment (`odr.exe mcp add`), and generates live MCPB `"0.3"` manifests with `_meta["com.microsoft.windows"].static_responses` for direct inspection or fallback file export.
+- **Supervised Child MCP Process Host**: Spawns external stdio MCP servers (`npx`, `uvx`, `.cmd`, executables) with `CREATE_NO_WINDOW`, merged `HKLM`/`HKCU` Registry `PATH` resolution, Win32 Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`) process-tree reclamation, live `rmcp` stdio handshake & tool discovery, redacted `env_keys`, and bounded `stderr_tail` logs.
 - **End-to-End Loopback Self-Test & Dry-Run Drill**: Ships with an in-app loopback client powered by Windows SChannel TLS (`reqwest` `native-tls`) to run one-click `keel_ping` connectivity checks and `kill_port_process` (`dry_run: true`) approval drills.
 - **The Graphite Spine Design System**: Preserves authentic Windows 11 native window chrome (`decorations: true`, `DWMWA_CAPTION_COLOR` pixel-locked to `#111116`), a constrained `100dvh` desktop frame with `<ScrollArea>` containment, unified six-step typography, `4px` spacing / `12px` plumb-line alignment, concentric `2px` border radii, and Windows High Contrast (`forced-colors`) support. See [`PRODUCT.md`](PRODUCT.md), [`DESIGN.md`](DESIGN.md), and [`AGENTS.md`](AGENTS.md).
 
@@ -119,19 +121,28 @@ KeelDesk/
 │   └── ROADMAP.zh-CN.md               # Architecture layers and Phase 1–5 roadmap (Simplified Chinese)
 ├── src-tauri/
 │   └── src/
-│       ├── keel_core/                 # Spine: MCP HTTP server, approval gate, tool registry, loopback client
+│       ├── keel_core/                 # Spine: MCP HTTP server, approval gate, Win11 ODR & child process host
+│       │   ├── win32_env.rs           # Win32 Registry PATH merging, CREATE_NO_WINDOW & CLI decoding
+│       │   ├── win_odr.rs             # Windows 11 odr.exe probing, enrollment & MCPB "0.3" manifest export
+│       │   └── process_host.rs        # Supervised stdio child MCP host with Win32 Job Object & rmcp handshake
 │       ├── workbench/                 # Workbench: Win11 dev-env scanner, port inspector, host summary
 │       ├── bin/export-bindings.rs     # tauri-specta TypeScript binding exporter binary
 │       ├── win11.rs                   # Win32 DWM dark titlebar theming and Registry build detection
 │       ├── tray.rs                    # System tray menu and background daemon lifecycle
 │       └── lib.rs                     # Single-instance bootstrap and Specta command/event registration
 └── src/
-    ├── keel-sdk/                      # Frontend SDK: useKeelRuntime & useToolApproval hooks
+    ├── keel-sdk/                      # Frontend SDK: runtime, approval, ODR, and process-host hooks
+    │   ├── useKeelRuntime.ts          # Embedded MCP server state & loopback self-test hook
+    │   ├── useToolApproval.ts         # ConfirmRequired approval queue & drill hook
+    │   ├── useWinOdr.ts               # Windows 11 ODR readiness, enrollment & manifest export hook
+    │   └── useProcessHost.ts          # Supervised child MCP server lifecycle & telemetry hook
     ├── styles/tokens.css              # Single-track dark graphite tokens & typography utilities
     ├── components/
     │   ├── ui/                        # shadcn/ui (radix-nova) primitives
     │   ├── ds/                        # KeelDesk domain design-system components
     │   ├── ToolApprovalDialog.tsx     # ConfirmRequired interactive desktop approval modal
+    │   ├── OdrManifestSheet.tsx       # Windows 11 ODR readiness, enrollment & MCPB "0.3" manifest sheet
+    │   ├── ProcessHostPanel.tsx       # Supervised stdio child MCP host table & tool/stderr drawer
     │   ├── PortsGovernancePanel.tsx   # Win32 listening port table & dry-run drill panel
     │   ├── DevEnvPanel.tsx            # Windows 11 local toolchain scanner panel
     │   └── WorkbenchSkeleton.tsx      # Stage 2 React boot skeleton
@@ -148,7 +159,7 @@ Full architecture specifications and phase breakdowns live in [`docs/ROADMAP.md`
 | **Phase 1 — Runtime Spine** | One-way `keel_core` / `workbench` decoupling, single-instance tray daemon, embedded Streamable HTTP MCP server, and native Windows 11 workbench | ✅ Completed |
 | **Phase 2 — Host Tools & Approval Gate** | Local dev-env & Win32 port governance tools plus tray-wakeup `ConfirmRequired` human-in-the-loop approval loop | ✅ Completed |
 | **Design System — The Graphite Spine** | Unified dark-only DWM pixel-locked tokens, six-step desktop typography, `12px` plumb line, concentric radii, `ui/` + `ds/` layering, and two-stage boot skeleton | ✅ Completed |
-| **Phase 3 — Windows 11 ODR & Process Host** | Native Windows Agent Registry (`odr.exe`) integration and `CREATE_NO_WINDOW` + Job Object child MCP process hosting | ⏳ In Progress |
+| **Phase 3 — Windows 11 ODR & Process Host** | Native Windows Agent Registry (`odr.exe`) enrollment + MCPB `"0.3"` manifest generation and `CREATE_NO_WINDOW` + Job Object child MCP process hosting | ✅ Completed |
 | **Phase 4 — React SDK & DevTools** | Standardized `useMcpServerState`, `useToolApproval`, `useExternalMcpClients`, and `<KeelDevTools />` payload inspector | 📋 Planned |
 | **Phase 5 — Workspace Modularization** | Cargo Workspace + `pnpm` Monorepo split into independent core crates, React SDK, and workbench app | 📋 Planned |
 

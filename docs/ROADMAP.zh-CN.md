@@ -68,16 +68,23 @@
 
 ---
 
-### ⏳ Phase 3：Windows 11 原生 ODR 集成与子进程托管（ODR & Process Host）
+### ✅ Phase 3：Windows 11 原生 ODR 集成与子进程托管（ODR & Process Host）
 
 - **目标**：对接 Windows 11 原生智能体注册表生态，并解决桌面端托管外部三方 MCP 子进程时的控制台闪烁与残留痛点。
-- **关键规划**：
-  1. **`keel_core::win_odr` 模块**：
-     - 自动检测 Windows 11 Build 版本、开发者模式状态及系统 `odr.exe` 可用性；
-     - 支持一键向 Windows On-Device Agent Registry 注册/注销 MCP 服务清单，并在环境未就绪时平滑回退至标准客户端配置导出。
-  2. **`keel_core::process_host` 子进程宿主**：
-     - 通过 `CREATE_NO_WINDOW`（`0x08000000`）消除 Windows 下拉起 `npx` / `uvx` / `.cmd` 子进程时的控制台黑框闪烁；
-     - 注入完整用户级环境变量 `PATH`，并绑定 **Windows Job Object（`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`）**，确保宿主退出或异常终止时子进程树被系统内核干净回收。
+- **已落地能力**：
+  1. **`keel_core::win32_env` 共享 Win32 环境辅助模块**：
+     - [x] 合并 `HKLM` / `HKCU` 注册表 `PATH` 重建（`build_merged_windows_path`）与基于 `PATHEXT` 的可执行文件解析（`resolve_executable_in_path`）；
+     - [x] `CREATE_NO_WINDOW`（`0x08000000`）无黑框子进程构建器、Windows 11 构建号/UBR/开发者模式注册表探测（`Win11OdrHostProfile`）以及 UTF-8/UTF-16LE/GBK CLI 输出解码。
+  2. **`keel_core::win_odr` Windows 11 ODR 集成**：
+     - [x] 探测 OS 构建号（`>= 22000` 与 `26220.7262+` 建议提示）、开发者模式与 `odr.exe` 可用性及版本（`OdrStatusReport`），并解析已注册服务列表；
+     - [x] 支持 URI（`odr.exe mcp add --uri ...`）与清单注册/注销，并实时生成包含 `_meta["com.microsoft.windows"].static_responses` 的 MCPB `"0.3"` 清单，在环境未就绪时平滑回退至本地文件导出（`%LOCALAPPDATA%\KeelDesk\odr\keeldesk.mcpb.manifest.json`）。
+  3. **`keel_core::process_host` 受控子进程 MCP 宿主**：
+     - [x] 以 `CREATE_NO_WINDOW`、合并注册表 `PATH` 及可选工作目录/环境变量（仅暴露脱敏 `env_keys`）拉起外部 `npx` / `uvx` / `.cmd` / 可执行文件 stdio MCP 服务；
+     - [x] 为每个子服务绑定 **Win32 Job Object（`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`）**，并在宿主停止或退出时由内核/运行时干净回收整棵子进程树；
+     - [x] 执行实时 `rmcp` stdio 握手（`initialize` + `list_tools`），采集 `server_info_*`、`handshake_ms`、`discovered_tools` 与有界 `stderr_tail` 诊断日志。
+  4. **前端 SDK 与工作台 UI（`keel-sdk` & `components/`）**：
+     - [x] 交付 `useWinOdr` 与 `useProcessHost` React Hooks，消费 `tauri-specta` 强类型命令及 `ProcessHostUpdatedEvent` 事件流；
+     - [x] 在工作台中新增 `Windows ODR` 接入页签、`OdrManifestSheet` 清单抽屉，以及 `ProcessHostPanel`（含新增子进程弹窗、内置 echo 探针预设、运行状态表与工具/stderr 详情抽屉）。
 
 ---
 

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Phase 3 — Windows 11 ODR & Supervised Child MCP Process Host**:
+  - `keel_core::win32_env`: Shared Win32 `HKLM`/`HKCU` Registry `PATH` reconstruction, `PATHEXT` executable resolution, `CREATE_NO_WINDOW` command builder, and Windows 11 build/UBR/Developer Mode detection.
+  - `keel_core::win_odr`: Windows 11 `odr.exe` readiness probing, URI/manifest registration & unregistration, and live MCPB `"0.3"` manifest generation (`_meta["com.microsoft.windows"].static_responses`) with local JSON export fallback.
+  - `keel_core::process_host`: Supervised child stdio MCP process host featuring `CREATE_NO_WINDOW`, Win32 Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`) tree reclamation, Registry `PATH` injection, `rmcp` `initialize`/`list_tools` handshake discovery, redacted `env_keys`, and bounded `stderr_tail` capture.
+  - Frontend SDK & Workbench UI: `useWinOdr` and `useProcessHost` hooks (`src/keel-sdk/`), `Windows ODR` integration snippet tab, `OdrManifestSheet`, and `ProcessHostPanel` (`src/components/`).
 - Bilingual English and Simplified Chinese documentation (`README.md`, `README.zh-CN.md`, `docs/ROADMAP.md`, `docs/ROADMAP.zh-CN.md`).
 - Community governance and security files (`CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CHANGELOG.md`).
 - GitHub Issue Forms, Pull Request template, and GitHub Actions CI & Windows release workflows (`.github/`).
