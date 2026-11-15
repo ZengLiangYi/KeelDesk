@@ -39,7 +39,8 @@
 - **Human-in-the-Loop `ConfirmRequired` Approval Gate**: Privileged MCP calls suspend cleanly on a `tokio::sync::oneshot` channel. If KeelDesk is minimized to the tray, it wakes and focuses the main window to surface an `AlertDialog` confirmation prompt supporting **Approve Once**, **Allow Session** allowlisting, **Deny**, immediate caller-cancellation cleanup (`RequestContext.ct`), and automatic timeout rejection (`60s` default).
 - **Windows 11 Native Host Inspection**: Launches toolchain probes concurrently with `CREATE_NO_WINDOW` (zero console flash) and enumerates listening TCPv4/TCPv6 ports and full executable paths via Win32 `GetExtendedTcpTable` and `QueryFullProcessImageNameW`.
 - **Windows 11 On-Device Agent Registry (`odr.exe`)**: Probes OS build, Developer Mode, and `odr.exe` readiness, supports one-click URI or manifest enrollment (`odr.exe mcp add`), and generates live MCPB `"0.3"` manifests with `_meta["com.microsoft.windows"].static_responses` for direct inspection or fallback file export.
-- **Supervised Child MCP Process Host**: Spawns external stdio MCP servers (`npx`, `uvx`, `.cmd`, executables) with `CREATE_NO_WINDOW`, merged `HKLM`/`HKCU` Registry `PATH` resolution, Win32 Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`) process-tree reclamation, live `rmcp` stdio handshake & tool discovery, redacted `env_keys`, and bounded `stderr_tail` logs.
+- **Supervised Child MCP Process Host**: Spawns external stdio MCP servers (`npx`, `uvx`, `.cmd`, executables) with `CREATE_NO_WINDOW`, merged `HKLM`/`HKCU` Registry `PATH` resolution, Win32 Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`) process-tree reclamation, live `rmcp` stdio handshake & tool discovery, interactive `tools/call` test invocation, redacted `env_keys`, and bounded `stderr_tail` logs.
+- **Standardized React SDK & `<KeelDevTools />` Protocol Inspector**: Exports reusable `useMcpServerState`, `useToolApproval`, `useExternalMcpClients`, `useWinOdr`, and `useKeelDevTools` hooks from `src/keel-sdk/`, paired with the collapsible `<KeelDevTools />` inspector drawer (`Ctrl+\``) featuring live JSON-RPC request/response wells, `approval_wait_ms` vs `execution_ms` latency breakdowns, Streamable HTTP session tracking, `/healthz` probing, and one-click trace jumps from the call stream or child tool runner.
 - **End-to-End Loopback Self-Test & Dry-Run Drill**: Ships with an in-app loopback client powered by Windows SChannel TLS (`reqwest` `native-tls`) to run one-click `keel_ping` connectivity checks and `kill_port_process` (`dry_run: true`) approval drills.
 - **The Graphite Spine Design System**: Preserves authentic Windows 11 native window chrome (`decorations: true`, `DWMWA_CAPTION_COLOR` pixel-locked to `#111116`), a constrained `100dvh` desktop frame with `<ScrollArea>` containment, unified six-step typography, `4px` spacing / `12px` plumb-line alignment, concentric `2px` border radii, and Windows High Contrast (`forced-colors`) support. See [`PRODUCT.md`](PRODUCT.md), [`DESIGN.md`](DESIGN.md), and [`AGENTS.md`](AGENTS.md).
 
@@ -121,21 +122,24 @@ KeelDesk/
 │   └── ROADMAP.zh-CN.md               # Architecture layers and Phase 1–5 roadmap (Simplified Chinese)
 ├── src-tauri/
 │   └── src/
-│       ├── keel_core/                 # Spine: MCP HTTP server, approval gate, Win11 ODR & child process host
+│       ├── keel_core/                 # Spine: MCP HTTP server, approval gate, devtools, Win11 ODR & process host
+│       │   ├── devtools.rs            # Bounded JSON-RPC protocol trace store & latency/session telemetry
 │       │   ├── win32_env.rs           # Win32 Registry PATH merging, CREATE_NO_WINDOW & CLI decoding
 │       │   ├── win_odr.rs             # Windows 11 odr.exe probing, enrollment & MCPB "0.3" manifest export
-│       │   └── process_host.rs        # Supervised stdio child MCP host with Win32 Job Object & rmcp handshake
+│       │   └── process_host.rs        # Supervised stdio child MCP host with Win32 Job Object & rmcp tool calls
 │       ├── workbench/                 # Workbench: Win11 dev-env scanner, port inspector, host summary
 │       ├── bin/export-bindings.rs     # tauri-specta TypeScript binding exporter binary
 │       ├── win11.rs                   # Win32 DWM dark titlebar theming and Registry build detection
 │       ├── tray.rs                    # System tray menu and background daemon lifecycle
 │       └── lib.rs                     # Single-instance bootstrap and Specta command/event registration
 └── src/
-    ├── keel-sdk/                      # Frontend SDK: runtime, approval, ODR, and process-host hooks
-    │   ├── useKeelRuntime.ts          # Embedded MCP server state & loopback self-test hook
-    │   ├── useToolApproval.ts         # ConfirmRequired approval queue & drill hook
+    ├── keel-sdk/                      # Frontend SDK: standardized hooks & <KeelDevTools /> inspector
+    │   ├── useMcpServerState.ts       # Embedded MCP server status, active sessions, /healthz & self-test hook
+    │   ├── useToolApproval.ts         # ConfirmRequired approval queue, session allowlist & drill hook
+    │   ├── useExternalMcpClients.ts   # Supervised child MCP lifecycle, stderr stream & tool invocation hook
     │   ├── useWinOdr.ts               # Windows 11 ODR readiness, enrollment & manifest export hook
-    │   └── useProcessHost.ts          # Supervised child MCP server lifecycle & telemetry hook
+    │   ├── useKeelDevTools.ts         # Protocol trace capture, filtering, pause/resume & call linking hook
+    │   └── KeelDevTools.tsx           # Collapsible JSON-RPC payload, latency & session inspector drawer (Ctrl+`)
     ├── styles/tokens.css              # Single-track dark graphite tokens & typography utilities
     ├── components/
     │   ├── ui/                        # shadcn/ui (radix-nova) primitives
@@ -160,7 +164,7 @@ Full architecture specifications and phase breakdowns live in [`docs/ROADMAP.md`
 | **Phase 2 — Host Tools & Approval Gate** | Local dev-env & Win32 port governance tools plus tray-wakeup `ConfirmRequired` human-in-the-loop approval loop | ✅ Completed |
 | **Design System — The Graphite Spine** | Unified dark-only DWM pixel-locked tokens, six-step desktop typography, `12px` plumb line, concentric radii, `ui/` + `ds/` layering, and two-stage boot skeleton | ✅ Completed |
 | **Phase 3 — Windows 11 ODR & Process Host** | Native Windows Agent Registry (`odr.exe`) enrollment + MCPB `"0.3"` manifest generation and `CREATE_NO_WINDOW` + Job Object child MCP process hosting | ✅ Completed |
-| **Phase 4 — React SDK & DevTools** | Standardized `useMcpServerState`, `useToolApproval`, `useExternalMcpClients`, and `<KeelDevTools />` payload inspector | 📋 Planned |
+| **Phase 4 — React SDK & DevTools** | Standardized `useMcpServerState`, `useToolApproval`, `useExternalMcpClients`, `useKeelDevTools`, and `<KeelDevTools />` JSON-RPC protocol inspector (`Ctrl+\``) | ✅ Completed |
 | **Phase 5 — Workspace Modularization** | Cargo Workspace + `pnpm` Monorepo split into independent core crates, React SDK, and workbench app | 📋 Planned |
 
 ## Contributing & Security

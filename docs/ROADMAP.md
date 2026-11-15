@@ -88,16 +88,21 @@
 
 ---
 
-### 📋 Phase 4: Standardized React SDK & `<KeelDevTools />`
+### ✅ Phase 4: Standardized React SDK & `<KeelDevTools />`
 
-- **Goal**: Productize reusable frontend hooks and an in-app MCP protocol inspector.
-- **Planned Scope**:
-  1. **`src/keel-sdk/` Standard Hooks**:
-     - `useMcpServerState()`: Server status, bound port, active sessions, and health controls.
-     - `useToolApproval()`: Pending approval queue, single-grant / session allowlist / deny controls.
-     - `useExternalMcpClients()`: Lifecycle control, status telemetry, and stderr streams for hosted child MCP processes.
-  2. **`<KeelDevTools />` Protocol Inspector Drawer**:
-     - Collapsible in-app drawer displaying live JSON-RPC request/response payloads, latency breakdowns, and error diagnostics.
+- **Goal**: Productize reusable frontend hooks, live JSON-RPC protocol telemetry, HTTP session tracking, and an in-app MCP protocol inspector.
+- **Delivered**:
+  1. **`keel_core::devtools` & Protocol Telemetry Spine (`src-tauri/src/keel_core/`)**:
+     - [x] Bounded JSON-RPC trace ring buffer (`MAX_PROTOCOL_TRACES = 128`, `MAX_TRACE_PAYLOAD_BYTES = 16 KiB`) capturing both inbound Streamable HTTP requests and outbound stdio child MCP RPC calls (`McpProtocolTraceEntry`), complete with `approval_wait_ms` vs `execution_ms` latency breakdowns (`McpLatencyBreakdown`) and linked call IDs.
+     - [x] Live Streamable HTTP session tracking (`McpSessionSummary`), `/healthz` readiness probing (`check_keel_healthz`), trace query/clear commands (`get_keel_protocol_traces`, `clear_keel_protocol_traces`), and interactive child stdio tool execution (`call_keel_child_server_tool`).
+  2. **`src/keel-sdk/` Standard Hooks**:
+     - [x] `useMcpServerState()`: Server status, bound port, `activeSessions`, `/healthz` probing (`checkHealth`), and loopback self-test controls (`useKeelRuntime` retained as a compatible alias).
+     - [x] `useToolApproval()`: Pending approval queue, single-grant / session allowlist / deny controls, and dry-run drill simulation.
+     - [x] `useExternalMcpClients()`: Lifecycle control, status telemetry, redacted `stderrStream`, and interactive `callClientTool()` execution for hosted child MCP processes (`useProcessHost` retained as a compatible alias).
+     - [x] `useKeelDevTools()`: Real-time `keel_protocol_trace` subscription, transport/status/search filtering, pause/resume capture buffering, and `selectByLinkedCallId()` frame lookup.
+  3. **`<KeelDevTools />` Protocol Inspector Drawer & Workbench Integration**:
+     - [x] Collapsible bottom inspector drawer (`Ctrl+\``) displaying live JSON-RPC request/response `CodeWell`s, `approval_wait_ms` vs `execution_ms` latency bar, error/interception diagnostics, active HTTP sessions, and `/healthz` probe trigger.
+     - [x] Integrated into `App.tsx` (status-bar toggle, `协议调试` button, clickable live call stream rows jumping via `linked_call_id`, and active session pills) and `ProcessHostPanel.tsx` (one-click `试调` on discovered tools with `查看报文 #seq` trace jump).
 
 ---
 

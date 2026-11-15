@@ -88,16 +88,21 @@
 
 ---
 
-### 📋 Phase 4：前端 React SDK 完善与 `<KeelDevTools />`（SDK & DevTools）
+### ✅ Phase 4：前端 React SDK 完善与 `<KeelDevTools />`（SDK & DevTools）
 
-- **目标**：沉淀标准化的前端状态管理 Hooks 与实时协议调试工具。
-- **关键规划**：
-  1. **`src/keel-sdk/` 标准 Hooks**：
-     - `useMcpServerState()`：服务运行状态、监听端口、活跃会话与健康度控制；
-     - `useToolApproval()`：待审批请求队列、单次放行/会话白名单/拒绝控制；
-     - `useExternalMcpClients()`：外部子进程 MCP 服务启停、状态与错误日志流。
-  2. **`<KeelDevTools />` 实时报文调试抽屉**：
-     - 可折叠的桌面内嵌协议面板，支持实时检视 JSON-RPC 请求/响应负载、耗时分布与异常上下文。
+- **目标**：沉淀标准化的前端状态管理 Hooks、JSON-RPC 协议追踪链路、HTTP 会话监控与实时协议调试工具。
+- **已落地能力**：
+  1. **`keel_core::devtools` 与协议遥测链路（`src-tauri/src/keel_core/`）**：
+     - [x] 有界 JSON-RPC 协议帧环形缓冲区（`MAX_PROTOCOL_TRACES = 128`，单帧载荷上限 `16 KiB`），同步采集入站 Streamable HTTP 请求与出站 Stdio 子进程 RPC 调用（`McpProtocolTraceEntry`），内置 `approval_wait_ms` vs `execution_ms` 耗时拆解（`McpLatencyBreakdown`）与调用序号关联（`linked_call_id`）。
+     - [x] Streamable HTTP 活跃会话追踪（`McpSessionSummary`）、`/healthz` 健康探活命令（`check_keel_healthz`）、追踪查询/清空命令（`get_keel_protocol_traces`、`clear_keel_protocol_traces`）及受控 Stdio 子进程交互式工具调用命令（`call_keel_child_server_tool`）。
+  2. **`src/keel-sdk/` 标准化 Hooks**：
+     - [x] `useMcpServerState()`：服务运行状态、监听端口、`activeSessions` 活跃会话、`/healthz` 探活与回环自检（保留 `useKeelRuntime` 兼容别名）；
+     - [x] `useToolApproval()`：待审批请求队列、单次放行/会话免审白名单/拒绝控制与演练模拟；
+     - [x] `useExternalMcpClients()`：受控子进程 MCP 服务启停、状态遥测、`stderrStream` 日志流与 `callClientTool()` 工具试调（保留 `useProcessHost` 兼容别名）；
+     - [x] `useKeelDevTools()`：实时 `keel_protocol_trace` 事件订阅、传输通道/状态/关键词筛选、暂停/恢复缓冲与 `selectByLinkedCallId()` 帧定位。
+  3. **`<KeelDevTools />` 协议调试抽屉与工作台集成**：
+     - [x] 支持 `Ctrl+\`` 快捷键唤醒的可折叠底部抽屉，提供双栏 JSON-RPC 请求/响应 `CodeWell`、审批等待与执行耗时分布条、错误/拦截诊断横幅、活跃 HTTP 会话面板及 `/healthz` 探活触发器；
+     - [x] 完整集成至 `App.tsx`（顶部会话计数徽标、底部状态栏 `KeelDevTools` 开关、实时调用观测流一键跳转对应协议帧）与 `ProcessHostPanel.tsx`（已发现工具行内 `试调` 按钮及 `查看报文 #seq` 直达调试器）。
 
 ---
 

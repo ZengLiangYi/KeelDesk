@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Phase 4 — Standardized React SDK & `<KeelDevTools />` Protocol Inspector**:
+  - `keel_core::devtools`: Bounded JSON-RPC protocol trace store (`MAX_PROTOCOL_TRACES = 128`, `16 KiB` payload cap) recording Streamable HTTP and stdio child MCP frames with `approval_wait_ms` vs `execution_ms` latency breakdowns (`McpLatencyBreakdown`) and linked call IDs.
+  - Runtime & Child Tool Telemetry (`keel_core::mcp_server`, `keel_core::process_host`, `keel_core::commands`): Streamable HTTP session tracking (`McpSessionSummary`), `/healthz` readiness probe (`check_keel_healthz`), protocol trace query/clear commands, and interactive child stdio tool invocation (`call_keel_child_server_tool`).
+  - Standardized Frontend SDK (`src/keel-sdk/`): `useMcpServerState`, `useToolApproval`, `useExternalMcpClients`, and `useKeelDevTools` hooks plus the collapsible `<KeelDevTools />` inspector drawer (`Ctrl+\``) featuring split request/response `CodeWell`s, latency breakdown bars, session inspection, and `/healthz` probing.
+  - Workbench Integration (`src/App.tsx`, `src/components/ProcessHostPanel.tsx`): Top command bar active session pill, clickable live call stream entries jumping straight to matching JSON-RPC frames, bottom status-bar `<KeelDevTools />` dock toggle, and inline child MCP tool test-call (`试调`) with `查看报文 #seq` trace jump.
 - **Phase 3 — Windows 11 ODR & Supervised Child MCP Process Host**:
   - `keel_core::win32_env`: Shared Win32 `HKLM`/`HKCU` Registry `PATH` reconstruction, `PATHEXT` executable resolution, `CREATE_NO_WINDOW` command builder, and Windows 11 build/UBR/Developer Mode detection.
   - `keel_core::win_odr`: Windows 11 `odr.exe` readiness probing, URI/manifest registration & unregistration, and live MCPB `"0.3"` manifest generation (`_meta["com.microsoft.windows"].static_responses`) with local JSON export fallback.
