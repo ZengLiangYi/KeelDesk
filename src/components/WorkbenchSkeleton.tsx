@@ -50,9 +50,10 @@ export function WorkbenchSkeleton() {
             </CardHeader>
             <CardContent className="flex flex-col gap-2.5">
               <div className="flex items-center gap-2 border-b border-border-subtle pb-2">
+                <Skeleton className="h-6 w-20 rounded-sm" />
                 <Skeleton className="h-6 w-24 rounded-sm" />
-                <Skeleton className="h-6 w-28 rounded-sm" />
-                <Skeleton className="h-6 w-28 rounded-sm" />
+                <Skeleton className="h-6 w-22 rounded-sm" />
+                <Skeleton className="h-6 w-24 rounded-sm" />
               </div>
               <Skeleton className="h-24 w-full rounded-md" />
             </CardContent>
@@ -63,10 +64,16 @@ export function WorkbenchSkeleton() {
               <Skeleton className="h-4 w-36 rounded-xs" />
               <Skeleton className="h-3.5 w-60 rounded-xs" />
               <CardAction>
-                <Skeleton className="h-7 w-44 rounded-sm" />
+                <Skeleton className="h-5 w-24 rounded-xs" />
               </CardAction>
             </CardHeader>
-            <CardContent className="flex min-h-0 flex-1 flex-col gap-2.5 pt-3">
+            <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-3 py-1.5">
+              <Skeleton className="h-6 w-22 rounded-sm" />
+              <Skeleton className="h-6 w-24 rounded-sm" />
+              <Skeleton className="h-6 w-18 rounded-sm" />
+              <Skeleton className="h-6 w-18 rounded-sm" />
+            </div>
+            <CardContent className="flex min-h-0 flex-1 flex-col gap-2.5 pt-1">
               <Skeleton className="h-8 w-full rounded-sm" />
               <Skeleton className="h-9 w-full rounded-sm" />
               <Skeleton className="h-9 w-11/12 rounded-sm" />

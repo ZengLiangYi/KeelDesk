@@ -1,5 +1,9 @@
 import * as React from "react";
-import type { KeelServerStatus } from "@/bindings";
+import type {
+  ChildServerStatus,
+  KeelServerStatus,
+  OdrReadinessState,
+} from "@/bindings";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -105,5 +109,66 @@ export function serverStatusLabel(status: KeelServerStatus | undefined): string 
       return "已停止";
     default:
       return "初始化";
+  }
+}
+
+export function childStatusToTone(
+  status: ChildServerStatus | undefined,
+): StatusTone {
+  switch (status) {
+    case "running":
+      return "ok";
+    case "starting":
+      return "warn";
+    case "failed":
+      return "danger";
+    case "stopped":
+    default:
+      return "neutral";
+  }
+}
+
+export function childStatusLabel(status: ChildServerStatus | undefined): string {
+  switch (status) {
+    case "running":
+      return "运行中";
+    case "starting":
+      return "启动中";
+    case "failed":
+      return "异常";
+    case "stopped":
+      return "已停止";
+    default:
+      return "未知";
+  }
+}
+
+export function odrReadinessToTone(
+  readiness: OdrReadinessState | undefined,
+): StatusTone {
+  switch (readiness) {
+    case "ready":
+      return "ok";
+    case "missing_odr_cli":
+      return "warn";
+    case "unsupported_os":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
+
+export function odrReadinessLabel(
+  readiness: OdrReadinessState | undefined,
+): string {
+  switch (readiness) {
+    case "ready":
+      return "odr.exe 就绪";
+    case "missing_odr_cli":
+      return "未检出 odr.exe · 回退模式";
+    case "unsupported_os":
+      return "需要 Windows 11";
+    default:
+      return "探测中";
   }
 }

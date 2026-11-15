@@ -18,7 +18,9 @@ import {
   type Win11HostSummary,
 } from "@/bindings";
 import { DevEnvPanel } from "@/components/DevEnvPanel";
+import { OdrManifestSheet } from "@/components/OdrManifestSheet";
 import { PortsGovernancePanel } from "@/components/PortsGovernancePanel";
+import { ProcessHostPanel } from "@/components/ProcessHostPanel";
 import { ToolApprovalDialog } from "@/components/ToolApprovalDialog";
 import { WorkbenchSkeleton } from "@/components/WorkbenchSkeleton";
 import {
@@ -30,6 +32,8 @@ import {
   StatusBadge,
   TruncatedText,
   formatTimeHms,
+  odrReadinessLabel,
+  odrReadinessToTone,
   serverStatusLabel,
   serverStatusToTone,
 } from "@/components/ds";
@@ -63,12 +67,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { isTauriRuntime, useKeelRuntime, useToolApproval } from "@/keel-sdk";
+import {
+  isTauriRuntime,
+  useKeelRuntime,
+  useProcessHost,
+  useToolApproval,
+  useWinOdr,
+} from "@/keel-sdk";
 import { cn } from "@/lib/utils";
 import "./App.css";
 
-type ConnectClientTab = "claude-code" | "cursor" | "powershell";
-type WorkbenchTab = "tools" | "ports" | "dev-env";
+type ConnectClientTab = "claude-code" | "cursor" | "win-odr" | "powershell";
+type WorkbenchTab = "tools" | "process-host" | "ports" | "dev-env";
 
 interface DrillFeedbackNotice {
   tone: "approved" | "blocked" | "info" | "error";
@@ -114,9 +124,14 @@ function App() {
     useState<ConnectClientTab>("claude-code");
   const [activeWorkbenchTab, setActiveWorkbenchTab] =
     useState<WorkbenchTab>("tools");
+  const [isOdrSheetOpen, setIsOdrSheetOpen] = useState(false);
   const [isDrilling, setIsDrilling] = useState(false);
   const [drillFeedback, setDrillFeedback] =
     useState<DrillFeedbackNotice | null>(null);
+
+  const endpointUrl = snapshot?.endpoint_url ?? "http://127.0.0.1:19527/mcp";
+  const winOdr = useWinOdr(endpointUrl);
+  const processHost = useProcessHost();
 
   useEffect(() => {
     // Drop inline critical boot styles once React + Tailwind stylesheet take over
@@ -152,7 +167,6 @@ function App() {
     };
   }, []);
 
-  const endpointUrl = snapshot?.endpoint_url ?? "http://127.0.0.1:19527/mcp";
   const healthzUrl = useMemo(
     () => endpointUrl.replace(/\/mcp$/, "/healthz"),
     [endpointUrl],
@@ -166,9 +180,12 @@ function App() {
     "keeldesk": { "url": "${endpointUrl}" }
   }
 }`,
+      "win-odr":
+        winOdr.odrStatus?.uri_register_command ??
+        `odr.exe mcp add --uri ${endpointUrl}`,
       powershell: `Invoke-RestMethod -Uri "${healthzUrl}"`,
     }),
-    [endpointUrl, healthzUrl],
+    [endpointUrl, healthzUrl, winOdr.odrStatus?.uri_register_command],
   );
 
   async function handleRunApprovalDrill(
@@ -272,6 +289,21 @@ function App() {
         onApproveOnce={approveOnce}
         onApproveForSession={approveForSession}
         onDeny={deny}
+      />
+
+      <OdrManifestSheet
+        open={isOdrSheetOpen}
+        onOpenChange={setIsOdrSheetOpen}
+        odrStatus={winOdr.odrStatus}
+        isLoading={winOdr.isLoading}
+        isActing={winOdr.isActing}
+        lastOutcome={winOdr.lastOutcome}
+        error={winOdr.error}
+        onRefresh={() => void winOdr.refreshOdrStatus()}
+        onRegister={(mode) => void winOdr.registerWithOdr(mode)}
+        onUnregister={(serverId) => void winOdr.unregisterFromOdr(serverId)}
+        onExportManifest={() => void winOdr.exportManifest(null)}
+        onClearOutcome={winOdr.clearOutcome}
       />
 
       <div className="flex h-dvh w-full flex-col overflow-clip bg-background text-foreground">
@@ -556,6 +588,12 @@ function App() {
                         Cursor · mcp.json
                       </TabsTrigger>
                       <TabsTrigger
+                        value="win-odr"
+                        className="flex-none px-2.5 text-caption"
+                      >
+                        Windows ODR
+                      </TabsTrigger>
+                      <TabsTrigger
                         value="powershell"
                         className="flex-none px-2.5 text-caption"
                       >
@@ -564,16 +602,74 @@ function App() {
                     </TabsList>
                   </div>
 
-                  {(
-                    ["claude-code", "cursor", "powershell"] as const
-                  ).map((tabKey) => (
-                    <TabsContent key={tabKey} value={tabKey} className="mt-0">
+                  {(["claude-code", "cursor", "powershell"] as const).map(
+                    (tabKey) => (
+                      <TabsContent
+                        key={tabKey}
+                        value={tabKey}
+                        className="mt-0"
+                      >
+                        <CodeWell
+                          code={snippets[tabKey]}
+                          viewportClassName="h-24"
+                        />
+                      </TabsContent>
+                    ),
+                  )}
+
+                  <TabsContent value="win-odr" className="mt-0">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex h-6 items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <StatusBadge
+                            tone={odrReadinessToTone(
+                              winOdr.odrStatus?.readiness,
+                            )}
+                          >
+                            {odrReadinessLabel(winOdr.odrStatus?.readiness)}
+                          </StatusBadge>
+                          {winOdr.odrStatus?.keel_enrolled ? (
+                            <MetricPill tone="ok">已注册</MetricPill>
+                          ) : winOdr.odrStatus ? (
+                            <MetricPill tone="subtle">
+                              Build {winOdr.odrStatus.os_build}
+                            </MetricPill>
+                          ) : null}
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            onClick={() => setIsOdrSheetOpen(true)}
+                          >
+                            查看/注册清单
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="ghost"
+                            disabled={winOdr.isActing || !winOdr.odrStatus}
+                            onClick={() => {
+                              void winOdr.exportManifest(null).then((outcome) => {
+                                if (outcome) {
+                                  setIsOdrSheetOpen(true);
+                                }
+                              });
+                            }}
+                          >
+                            导出清单
+                          </Button>
+                        </div>
+                      </div>
+
                       <CodeWell
-                        code={snippets[tabKey]}
-                        viewportClassName="h-24"
+                        code={snippets["win-odr"]}
+                        viewportClassName="h-16"
                       />
-                    </TabsContent>
-                  ))}
+                    </div>
+                  </TabsContent>
                 </Tabs>
               </CardContent>
             </Card>
@@ -593,25 +689,51 @@ function App() {
                     <h2 id="workbench-host-heading">Windows 11 宿主治理工作台</h2>
                   </CardTitle>
                   <CardDescription className="min-w-0 truncate">
-                    MCP 契约元数据、Win32 活跃监听端口与本机开发工具链观测
+                    MCP 契约、受控 Stdio 子进程、监听端口与开发工具链
                   </CardDescription>
                   <CardAction>
-                    <TabsList aria-label="宿主工作台视图切换">
-                      <TabsTrigger
-                        value="tools"
-                        className="px-2.5 text-caption tabular-nums"
-                      >
-                        工具契约 ({toolCount})
-                      </TabsTrigger>
-                      <TabsTrigger value="ports" className="px-2.5 text-caption">
-                        端口治理
-                      </TabsTrigger>
-                      <TabsTrigger value="dev-env" className="px-2.5 text-caption">
-                        本机环境
-                      </TabsTrigger>
-                    </TabsList>
+                    {processHost.hostSnapshot.running_count > 0 ? (
+                      <StatusBadge tone="ok" mono>
+                        {processHost.hostSnapshot.running_count} 子进程运行
+                      </StatusBadge>
+                    ) : (
+                      <MetricPill tone="subtle">Win32 原生治理</MetricPill>
+                    )}
                   </CardAction>
                 </CardHeader>
+
+                <div className="shrink-0 border-b border-border-subtle px-3 pt-1 pb-1">
+                  <TabsList
+                    variant="line"
+                    aria-label="宿主工作台视图切换"
+                    className="w-full flex-nowrap justify-start overflow-x-auto"
+                  >
+                    <TabsTrigger
+                      value="tools"
+                      className="flex-none px-2.5 text-caption tabular-nums"
+                    >
+                      工具契约 ({toolCount})
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="process-host"
+                      className="flex-none px-2.5 text-caption tabular-nums"
+                    >
+                      子进程托管 ({processHost.hostSnapshot.servers.length})
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="ports"
+                      className="flex-none px-2.5 text-caption"
+                    >
+                      端口治理
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="dev-env"
+                      className="flex-none px-2.5 text-caption"
+                    >
+                      本机环境
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
 
                 <TabsContent
                   value="tools"
@@ -694,6 +816,26 @@ function App() {
                       ConfirmRequired 人工审批保护生效中
                     </span>
                   </CardFooter>
+                </TabsContent>
+
+                <TabsContent
+                  value="process-host"
+                  forceMount
+                  className="mt-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
+                >
+                  <ProcessHostPanel
+                    hostSnapshot={processHost.hostSnapshot}
+                    isLoading={processHost.isLoading}
+                    isStarting={processHost.isStarting}
+                    busyServerIds={processHost.busyServerIds}
+                    error={processHost.error}
+                    onStartServer={processHost.startChildServer}
+                    onStopServer={processHost.stopChildServer}
+                    onRemoveServer={processHost.removeChildServer}
+                    onRestartServer={processHost.restartChildServer}
+                    onRefresh={processHost.refreshSnapshot}
+                    onClearError={processHost.clearError}
+                  />
                 </TabsContent>
 
                 <TabsContent

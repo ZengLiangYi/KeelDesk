@@ -99,6 +99,7 @@ export interface CodeWellProps {
   copiedLabel?: string;
   wrapLines?: boolean;
   className?: string;
+  scrollAreaClassName?: string;
   viewportClassName?: string;
   preClassName?: string;
 }
@@ -110,6 +111,7 @@ export function CodeWell({
   copiedLabel = "已复制",
   wrapLines = false,
   className,
+  scrollAreaClassName,
   viewportClassName,
   preClassName,
 }: CodeWellProps) {
@@ -135,7 +137,7 @@ export function CodeWell({
         </div>
       )}
       <ScrollArea
-        className="w-full"
+        className={cn("w-full", scrollAreaClassName)}
         viewportClassName={viewportClassName}
       >
         <pre
