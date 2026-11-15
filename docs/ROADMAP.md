@@ -9,25 +9,26 @@
 ## 1. Architectural Layering & One-Way Dependency Contract
 
 ```text
-┌───────────────────────────────────────────────────────────────────┐
-│                    Workbench Layer (Workbench App)                │
-│  Rust: src-tauri/src/workbench/   │  React: src/App.tsx           │
-│  - Win11 dev-env & port tools     │  - Native Win11 workbench UI  │
-│  - Registers tools in registry    │  - Consumes keel-sdk hooks    │
-└───────────────────────┬───────────┴──────────────┬────────────────┘
-                        │ One-way dependency       │
-                        ▼                          ▼
-┌───────────────────────────────────────────────────────────────────┐
-│                    Runtime Spine (Keel Spine)                     │
-│  Rust: src-tauri/src/keel_core/   │  React: src/keel-sdk/         │
-│  - Embedded rmcp + axum HTTP MCP  │  - useKeelRuntime() hooks     │
-│  - Loopback DNS-rebinding guard   │  - Typed tauri-specta events  │
-│  - Safe / ConfirmRequired tiers   │  - Tray lifecycle & shutdown  │
-└───────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                     Workbench Layer (env-workbench)                    │
+│  Rust: apps/env-workbench/src-tauri/  │  React: apps/env-workbench/src │
+│  - Win11 dev-env & port tools         │  - Native Win11 workbench UI   │
+│  - Registers tools in registry        │  - Consumes @keeldesk/react    │
+└───────────────────────────┬───────────┴───────────────┬────────────────┘
+                            │ One-way dependency        │
+                            ▼                           ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                    Runtime Spine (KeelDesk Spine)                      │
+│  Rust: crates/keeldesk-core/          │  React: packages/react/        │
+│        crates/tauri-plugin-keeldesk/  │  - @keeldesk/react SDK hooks   │
+│  - Embedded rmcp + axum HTTP MCP      │  - <KeelDevTools /> inspector  │
+│  - Loopback DNS-rebinding guard       │  - Typed plugin bindings       │
+│  - Safe / ConfirmRequired tiers       │  - Tray lifecycle & shutdown   │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Core Engineering Principles**:
-1. **Strict One-Way Boundary**: `src-tauri/src/keel_core/` and `src/keel-sdk/` contain zero domain-specific imports from `workbench/`, preserving clean extraction paths for standalone crates and packages.
+1. **Strict One-Way Boundary**: `crates/keeldesk-core/`, `crates/tauri-plugin-keeldesk/`, and `packages/react/` contain zero domain-specific imports from `apps/env-workbench/`, enforcing clean workspace-level isolation.
 2. **Windows 11 Native UX & The Graphite Spine**: Authentic Win32 window chrome (`decorations: true`, native Snap Layouts, system border), `DWMWA_CAPTION_COLOR` pixel-locked to `#111116`, a constrained `100dvh` frame (`overflow: clip`), `shadcn/ui` (`radix-nova`) + `ds/` components, Windows High Contrast (`forced-colors`) support, and a two-stage zero-flash boot skeleton (normative rules in [`DESIGN.md`](../DESIGN.md), [`PRODUCT.md`](../PRODUCT.md), and [`AGENTS.md`](../AGENTS.md)).
 
 ---
@@ -36,12 +37,12 @@
 
 ### ✅ Phase 1: Runtime Spine & Loopback Foundation
 
-- **Goal**: Establish the one-way architectural boundary between `keel_core` and `workbench`, delivering a single-instance system-tray daemon hosting an embedded Streamable HTTP MCP server inside a native Windows 11 dark workbench.
+- **Goal**: Establish the one-way architectural boundary between the MCP runtime spine and the workbench, delivering a single-instance system-tray daemon hosting an embedded Streamable HTTP MCP server inside a native Windows 11 dark workbench.
 - **Delivered**:
-  - `src-tauri/src/keel_core/`: `KeelConfig` (default `127.0.0.1:19527/mcp`, `KEELDESK_MCP_PORT` override), `KeelMcpServer` built on `rmcp` v3.10 + `axum` v0.8, `Host`/`Origin` DNS-rebinding allowlist, `/healthz` endpoint, `keel_ping` tool, and embedded loopback self-test client (`reqwest` `native-tls`).
-  - `src-tauri/src/workbench/`: Business tool registration entry point and Registry-based Windows 11 host build detection.
+  - `keeldesk-core`: `KeelConfig` (default `127.0.0.1:19527/mcp`, `KEELDESK_MCP_PORT` override), `KeelMcpServer` built on `rmcp` v3.10 + `axum` v0.8, `Host`/`Origin` DNS-rebinding allowlist, `/healthz` endpoint, `keel_ping` tool, and embedded loopback self-test client (`reqwest` `native-tls`).
+  - `workbench`: Business tool registration entry point and Registry-based Windows 11 host build detection.
   - Single-instance lock (`tauri-plugin-single-instance`), hide-to-tray on window close, and clean tray `Quit` shutdown.
-  - Win32 DWM dark titlebar theming (`src-tauri/src/win11.rs`) and typed `tauri-specta` command/event bindings.
+  - Win32 DWM dark titlebar theming (`win11.rs`) and typed `tauri-specta` command/event bindings.
 
 ---
 
@@ -53,9 +54,9 @@
      - `scan_dev_env` (`Safe`): Concurrently probes `git`, `node`, `pnpm`, `rustc`, `cargo`, `python`, `uv`, `pwsh`, `winget`, and `wsl` via `CREATE_NO_WINDOW` with UTF-16LE decoding and `WindowsApps` stub filtering.
      - `list_active_ports` (`Safe`): Enumerates listening TCPv4/TCPv6 ports, PIDs, and full image paths via Win32 `GetExtendedTcpTable` and `QueryFullProcessImageNameW`.
      - `kill_port_process` (`ConfirmRequired`): Protected by `expected_pid` TOCTOU validation, self/system PID safeguards, Win32 `TerminateProcess`, and `dry_run` simulation mode.
-  2. **Asynchronous Approval Interceptor (`keel_core`)**:
+  2. **Asynchronous Approval Interceptor (`keeldesk-core`)**:
      - `KeelMcpServer::call_tool` suspends `ConfirmRequired` invocations on a `tokio::sync::oneshot` channel, supporting `ApproveOnce`, `ApproveForSession`, `Deny`, timeout rejection, immediate caller cancellation (`RequestContext.ct`) cleanup, and automatic tray-to-foreground window focus.
-  3. **Desktop Approval Modal & Three-Tab Workbench (`keel-sdk` & UI)**:
+  3. **Desktop Approval Modal & Three-Tab Workbench (`@keeldesk/react` & UI)**:
      - `useToolApproval()` hook, `ToolApprovalDialog` live countdown modal, and the Contract / Ports Governance / Local Env workbench tabs.
 
 ---
@@ -64,7 +65,7 @@
 
 - **Goal**: Standardize every visual primitive, layout frame, and boot state across the desktop workbench.
 - **Delivered**:
-  - Single-track dark graphite ramp (`src/styles/tokens.css`) pixel-locked to Win32 `DWMWA_CAPTION_COLOR` (`#111116`), unified six-step typography scale, `4px` spacing grid with `12px` plumb-line alignment, concentric `2px` border radii, `src/components/ui/` normalization, `src/components/ds/` domain primitives (`StatusBadge`, `SafetyTierBadge`, `TruncatedText`, `CodeWell`, `CopyButton`, `MetricPill`, `EmptyState`), and synchronized Stage 1 (`index.html`) / Stage 2 (`WorkbenchSkeleton.tsx`) boot skeletons.
+  - Single-track dark graphite ramp (`apps/env-workbench/src/styles/tokens.css`) pixel-locked to Win32 `DWMWA_CAPTION_COLOR` (`#111116`), unified six-step typography scale, `4px` spacing grid with `12px` plumb-line alignment, concentric `2px` border radii, `components/ui/` normalization, `components/ds/` domain primitives (`StatusBadge`, `SafetyTierBadge`, `TruncatedText`, `CodeWell`, `CopyButton`, `MetricPill`, `EmptyState`), and synchronized Stage 1 (`apps/env-workbench/index.html`) / Stage 2 (`WorkbenchSkeleton.tsx`) boot skeletons.
 
 ---
 
@@ -72,17 +73,17 @@
 
 - **Goal**: Integrate with the Windows 11 On-Device Agent Registry ecosystem and eliminate console flashes or orphaned child trees when hosting third-party MCP servers.
 - **Delivered**:
-  1. **`keel_core::win32_env` Shared Win32 Environment Helpers**:
+  1. **`keeldesk_core::win32_env` Shared Win32 Environment Helpers**:
      - [x] Merged `HKLM`/`HKCU` Registry `PATH` reconstruction (`build_merged_windows_path`) with `PATHEXT` executable resolution (`resolve_executable_in_path`).
      - [x] `CREATE_NO_WINDOW` (`0x08000000`) subprocess builder, Windows 11 build/UBR/Developer Mode Registry probing (`Win11OdrHostProfile`), and UTF-8/UTF-16LE/GBK CLI output decoding.
-  2. **`keel_core::win_odr` Windows 11 ODR Integration**:
+  2. **`keeldesk_core::win_odr` Windows 11 ODR Integration**:
      - [x] Probes OS build (`>= 22000`, `26220.7262+` hint), Developer Mode, and `odr.exe` availability & version (`OdrStatusReport`), plus enrolled server listing.
      - [x] Supports URI (`odr.exe mcp add --uri ...`) and manifest registration/unregistration, plus live MCPB `"0.3"` manifest generation (`_meta["com.microsoft.windows"].static_responses`) with local JSON export fallback (`%LOCALAPPDATA%\KeelDesk\odr\keeldesk.mcpb.manifest.json`).
-  3. **`keel_core::process_host` Supervised Child MCP Process Host**:
+  3. **`keeldesk_core::process_host` Supervised Child MCP Process Host**:
      - [x] Spawns external stdio MCP servers (`npx`, `uvx`, `.cmd`, executables) with `CREATE_NO_WINDOW`, merged Registry `PATH`, and optional working directory / environment variables (exposed strictly as redacted `env_keys`).
      - [x] Binds every child server to a **Win32 Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`)** and runs clean shutdown reclamation when KeelDesk stops or exits.
      - [x] Performs live `rmcp` stdio client handshake (`initialize` + `list_tools`) to record `server_info_*`, `handshake_ms`, `discovered_tools`, and bounded `stderr_tail` diagnostics.
-  4. **Frontend SDK & Workbench UI (`keel-sdk` & `components/`)**:
+  4. **Frontend SDK & Workbench UI (`@keeldesk/react` & `components/`)**:
      - [x] `useWinOdr` and `useProcessHost` React hooks consuming generated `tauri-specta` commands and `ProcessHostUpdatedEvent`.
      - [x] `Windows ODR` snippet tab, `OdrManifestSheet` side sheet, and `ProcessHostPanel` (spawn dialog, built-in echo probe preset, live status table, and discovered tools / `stderr_tail` inspection sheet).
 
@@ -92,10 +93,10 @@
 
 - **Goal**: Productize reusable frontend hooks, live JSON-RPC protocol telemetry, HTTP session tracking, and an in-app MCP protocol inspector.
 - **Delivered**:
-  1. **`keel_core::devtools` & Protocol Telemetry Spine (`src-tauri/src/keel_core/`)**:
+  1. **`keeldesk_core::devtools` & Protocol Telemetry Spine**:
      - [x] Bounded JSON-RPC trace ring buffer (`MAX_PROTOCOL_TRACES = 128`, `MAX_TRACE_PAYLOAD_BYTES = 16 KiB`) capturing both inbound Streamable HTTP requests and outbound stdio child MCP RPC calls (`McpProtocolTraceEntry`), complete with `approval_wait_ms` vs `execution_ms` latency breakdowns (`McpLatencyBreakdown`) and linked call IDs.
      - [x] Live Streamable HTTP session tracking (`McpSessionSummary`), `/healthz` readiness probing (`check_keel_healthz`), trace query/clear commands (`get_keel_protocol_traces`, `clear_keel_protocol_traces`), and interactive child stdio tool execution (`call_keel_child_server_tool`).
-  2. **`src/keel-sdk/` Standard Hooks**:
+  2. **`@keeldesk/react` Standard Hooks**:
      - [x] `useMcpServerState()`: Server status, bound port, `activeSessions`, `/healthz` probing (`checkHealth`), and loopback self-test controls (`useKeelRuntime` retained as a compatible alias).
      - [x] `useToolApproval()`: Pending approval queue, single-grant / session allowlist / deny controls, and dry-run drill simulation.
      - [x] `useExternalMcpClients()`: Lifecycle control, status telemetry, redacted `stderrStream`, and interactive `callClientTool()` execution for hosted child MCP processes (`useProcessHost` retained as a compatible alias).
@@ -106,15 +107,25 @@
 
 ---
 
-### 📋 Phase 5: Workspace Modularization
+### ✅ Phase 5: Workspace Modularization
 
 - **Goal**: Split the repository into a Cargo Workspace and `pnpm` Monorepo so the runtime spine, Tauri plugin, React SDK, and workbench app can be consumed independently:
+- **Delivered**:
+  1. **Cargo Workspace (`Cargo.toml`)**:
+     - [x] `crates/keeldesk-core/`: Pure Rust MCP runtime spine with zero `tauri` UI dependencies, using `KeelRuntimeOptions` notifier callbacks and `RuntimeTaskSpawner` for host window wakeup and event dispatch.
+     - [x] `crates/tauri-plugin-keeldesk/`: Standard Tauri v2 plugin wrapper (`plugin:keeldesk`) with autogenerated capability permissions, namespaced Specta commands/events, and shutdown orchestration.
+     - [x] `apps/env-workbench/src-tauri/`: Desktop workbench application crate (`keeldesk`) consuming `keeldesk-core` and `tauri-plugin-keeldesk` while keeping `workbench` tools decoupled.
+  2. **`pnpm` Workspace (`pnpm-workspace.yaml`)**:
+     - [x] `packages/react/` (`@keeldesk/react`): Standalone React 19 SDK + `<KeelDevTools />` package compiling `.js` + `.d.ts` into `packages/react/dist/`, consuming `packages/react/src/bindings.ts` with zero `apps/env-workbench` imports.
+     - [x] `apps/env-workbench/` (`@keeldesk/env-workbench`): Desktop workbench frontend consuming `@keeldesk/react` (`workspace:*`), retaining `apps/env-workbench/src/bindings.ts` for workbench commands and configuring Tailwind CSS v4 `@source` scanning across `packages/react/src/`.
+  3. **CI, Release & Documentation Alignment**:
+     - [x] Updated `.github/workflows/ci.yml` and `.github/workflows/release.yml` for Cargo + `pnpm` workspace verification and Tauri bundling (`projectPath: apps/env-workbench`).
 
 ```text
-keeldesk/
+KeelDesk/
 ├── crates/
 │   ├── keeldesk-core/          # Pure Rust MCP runtime, approval gate, Win11 ODR & process host
-│   └── tauri-plugin-keeldesk/  # Standard Tauri v2 plugin wrapper
+│   └── tauri-plugin-keeldesk/  # Standard Tauri v2 plugin wrapper (`plugin:keeldesk`)
 ├── packages/
 │   └── react/                  # @keeldesk/react (Hooks + <KeelDevTools />)
 └── apps/

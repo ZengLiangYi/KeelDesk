@@ -162,7 +162,7 @@ An ultra-restrained graphite-black monochrome ramp anchored by a single electric
 - **Hairline Borders** (`{colors.border-subtle}` / `{colors.border-default}` / `{colors.border-strong}`): White-alpha `1px` strokes (`6%`, `9%`, `16%`) that adapt cleanly across dark graphite layers.
 
 ### Named Rules
-**The DWM Pixel-Lock Rule.** `surface-canvas` must remain `#111116` at all times to match `DWMWA_CAPTION_COLOR` (`0x00161111`) in `src-tauri/src/win11.rs`. Changing one without the other breaks the native window illusion and is forbidden.
+**The DWM Pixel-Lock Rule.** `surface-canvas` must remain `#111116` at all times to match `DWMWA_CAPTION_COLOR` (`0x00161111`) in `apps/env-workbench/src-tauri/src/win11.rs`. Changing one without the other breaks the native window illusion and is forbidden.
 
 **The Monochrome 95% Rule.** At rest, at least 95% of the viewport must remain monochrome graphite and neutral ink. Keel Indigo is capped at ≤5% of screen area; never tint entire card backgrounds or decorative headers with brand color.
 
@@ -239,7 +239,7 @@ Components share a unified control-height ladder (`xs: 24px`, `sm: 28px`, `md: 3
 - **Do** follow the concentric `2px` radius step-down (`12px` modal -> `10px` card -> `8px` well/alert -> `6px` button/input -> `4px` badge/kbd).
 - **Do** use exclusively the six semantic typography utilities (`text-title-lg`, `text-title`, `text-body`, `text-caption`, `text-micro`, `text-code`) and apply `font-mono tabular-nums` to all ports, PIDs, durations, and counters.
 - **Do** wrap truncated paths, versions, and descriptions in `<TruncatedText>` (keyboard-focusable Radix `<Tooltip>` with `aria-hidden="true"` duplicate suppression) rather than native `title` attributes.
-- **Do** synchronize `index.html`'s inline `#keel-critical-boot` skeleton colors and radii whenever canvas or panel tokens change.
+- **Do** synchronize `apps/env-workbench/index.html`'s inline `#keel-critical-boot` skeleton colors and radii whenever canvas or panel tokens change.
 
 ### Don't:
 - **Don't** use gradient text (`background-clip: text`), neon AI glows, or decorative glassmorphism across workbench panels.

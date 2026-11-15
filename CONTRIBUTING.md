@@ -24,34 +24,36 @@ pnpm tauri dev
 
 ## 3. Architecture Boundary Rule
 
-KeelDesk enforces a **strict one-way dependency boundary** between its runtime spine and the desktop workbench:
+KeelDesk enforces a **strict one-way dependency boundary** across its Cargo + `pnpm` workspace monorepo:
 
-- **Framework Spine (`src-tauri/src/keel_core/`, `src/keel-sdk/`)**: Embedded `rmcp` + `axum` Streamable HTTP server, safety registry (`Safe` / `ConfirmRequired`), `oneshot` approval gate, telemetry events, and React SDK hooks.
-- **Workbench Application (`src-tauri/src/workbench/`, `src/App.tsx`, `src/components/`)**: Windows 11 host inspection, port governance, and desktop UI attached to `KeelToolRegistry`.
+- **Framework Spine (`crates/keeldesk-core/`, `crates/tauri-plugin-keeldesk/`, `packages/react/`)**: Pure Rust embedded `rmcp` + `axum` Streamable HTTP server, safety registry (`Safe` / `ConfirmRequired`), `oneshot` approval gate, Win11 ODR & supervised child MCP process host, Tauri v2 plugin wrapper, and `@keeldesk/react` SDK hooks + `<KeelDevTools />`.
+- **Workbench Application (`apps/env-workbench/src-tauri/src/workbench/`, `apps/env-workbench/src/App.tsx`, `apps/env-workbench/src/components/`)**: Windows 11 host inspection, port governance, and desktop UI attached to `KeelToolRegistry`, consuming `@keeldesk/react`.
 
-> **`keel_core` and `keel-sdk` must NEVER import or depend on `workbench` modules.**
+> **`crates/keeldesk-core/`, `crates/tauri-plugin-keeldesk/`, and `packages/react/` must NEVER import or depend on `apps/env-workbench` business modules.**
 
 When adding a new MCP tool:
-1. Place generic runtime/protocol primitives in `keel_core`, and host/domain tools in `workbench`.
+1. Place generic runtime/protocol primitives in `crates/keeldesk-core`, and host/domain tools in `apps/env-workbench/src-tauri/src/workbench/`.
 2. Assign an explicit `ToolSafetyTier` (`Safe` for read-only/side-effect-free queries; `ConfirmRequired` for any state-mutating or destructive operation).
 
 ## 4. TypeScript & `tauri-specta` Bindings Workflow
 
-KeelDesk uses `tauri-specta` (`=2.0.0-rc.25`) to generate typed IPC bindings in `src/bindings.ts`.
+KeelDesk uses `tauri-specta` (`=2.0.0-rc.25`) to generate typed IPC bindings across two separated files:
+- `packages/react/src/bindings.ts`: Core plugin commands (`plugin:keeldesk|*`) and events (`plugin:keeldesk:*`).
+- `apps/env-workbench/src/bindings.ts`: Workbench-specific Tauri commands.
 
-- **Never hand-edit `src/bindings.ts`**, and do not write raw `invoke("...")` or untyped event listeners when a binding exists.
+- **Never hand-edit either `bindings.ts`**, and do not write raw `invoke("...")` or untyped event listeners when a binding exists.
 - When adding or modifying a Rust command or event:
-  - Commands: annotate with `#[tauri::command]` and `#[specta::specta]`, prefer owned parameters (`String` over `&str`), and register in `collect_commands![...]`.
-  - Events: derive `serde::Serialize`, `serde::Deserialize`, `specta::Type`, and `tauri_specta::Event`, register in `collect_events![...]`, and mount in `setup()`.
-  - Regenerate bindings immediately with `pnpm bindings` and commit the updated `src/bindings.ts`.
+  - Commands: annotate with `#[tauri::command]` and `#[specta::specta]`, prefer owned parameters (`String` over `&str`), and register in `collect_commands![...]` inside `crates/tauri-plugin-keeldesk` (core) or `apps/env-workbench/src-tauri` (workbench).
+  - Events: derive `serde::Serialize`, `serde::Deserialize`, `specta::Type`, and `tauri_specta::Event`, register in `collect_events![...]`, and keep `specta_builder.mount_events(...)` active.
+  - Regenerate bindings immediately with `pnpm bindings` and commit updated `bindings.ts` files.
 
 ## 5. Design System & Native Chrome Rules
 
 Before modifying frontend UI or styling, read [`PRODUCT.md`](PRODUCT.md), [`DESIGN.md`](DESIGN.md), and [`AGENTS.md`](AGENTS.md):
 
 - **Brand Identifier**: Always refer to the product as **`KeelDesk`** (never translate `KeelDesk` or `Keel` in localized copy).
-- **Native Windows 11 Chrome**: Keep `"decorations": true`, `"transparent": false`, `"backgroundColor": "#111116"` in `src-tauri/tauri.conf.json`, and preserve `DWMWA_CAPTION_COLOR` (`0x00161111`) in `src-tauri/src/win11.rs`. Do not add custom HTML titlebars or override `DWMWA_BORDER_COLOR`.
-- **The Graphite Spine Tokens**: Use only the six typography utilities (`text-title-lg`, `text-title`, `text-body`, `text-caption`, `text-micro`, `text-code`), `font-mono tabular-nums` for dynamic telemetry, the `4px` spacing / `12px` plumb-line grid, concentric `2px` border radii, `100dvh` viewport lock (`overflow: clip`), and `<TruncatedText>` instead of native HTML `title` attributes.
+- **Native Windows 11 Chrome**: Keep `"decorations": true`, `"transparent": false`, `"backgroundColor": "#111116"` in `apps/env-workbench/src-tauri/tauri.conf.json`, and preserve `DWMWA_CAPTION_COLOR` (`0x00161111`) in `apps/env-workbench/src-tauri/src/win11.rs`. Do not add custom HTML titlebars or override `DWMWA_BORDER_COLOR`.
+- **The Graphite Spine Tokens**: Use only the six typography utilities (`text-title-lg`, `text-title`, `text-body`, `text-caption`, `text-micro`, `text-code`), `font-mono tabular-nums` for dynamic telemetry, the `4px` spacing / `12px` plumb-line grid, concentric `2px` border radii, `100dvh` viewport lock (`overflow: clip`), `@source "../../../packages/react/src/**/*.{ts,tsx}";` in `apps/env-workbench/src/index.css`, and `<TruncatedText>` instead of native HTML `title` attributes.
 - **Keep `pnpm-lock.yaml` in sync** if dependencies change.
 
 ## 6. Pre-PR Verification Checklist
@@ -59,14 +61,15 @@ Before modifying frontend UI or styling, read [`PRODUCT.md`](PRODUCT.md), [`DESI
 Run all checks locally before opening a Pull Request (these mirror `.github/workflows/ci.yml`):
 
 ```bash
-cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
 pnpm bindings
+pnpm typecheck
 pnpm build
-cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --workspace
 ```
 
-Ensure `git status` shows no uncommitted drift in `src/bindings.ts` after running `pnpm bindings`.
+Ensure `git status` shows no uncommitted drift in `packages/react/src/bindings.ts` or `apps/env-workbench/src/bindings.ts` after running `pnpm bindings`.
 
 ## 7. Pull Request & Commit Guidelines
 
