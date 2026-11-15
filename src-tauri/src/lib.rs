@@ -25,6 +25,10 @@ fn specta_builder() -> Builder<tauri::Wry> {
             keel_core::commands::start_keel_child_server,
             keel_core::commands::stop_keel_child_server,
             keel_core::commands::remove_keel_child_server,
+            keel_core::commands::check_keel_healthz,
+            keel_core::commands::get_keel_protocol_traces,
+            keel_core::commands::clear_keel_protocol_traces,
+            keel_core::commands::call_keel_child_server_tool,
             workbench::get_win11_host_summary,
             workbench::scan_win11_dev_env,
             workbench::list_win11_active_ports,
@@ -34,6 +38,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
             keel_core::KeelRuntimeUpdatedEvent,
             keel_core::ToolApprovalRequestedEvent,
             keel_core::ProcessHostUpdatedEvent,
+            keel_core::KeelProtocolTraceEvent,
+            keel_core::KeelProtocolTraceClearedEvent,
         ])
 }
 

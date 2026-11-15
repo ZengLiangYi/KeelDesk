@@ -3,7 +3,15 @@ use std::{
     time::{Duration, Instant},
 };
 
-use axum::{routing::get, Json as AxumJson, Router};
+use axum::{
+    extract::Request,
+    middleware::{self, Next},
+    response::Response,
+    routing::get,
+    Json as AxumJson, Router,
+};
+use chrono::Utc;
+use http::{HeaderMap, Method, StatusCode};
 use rmcp::{
     model::{CallToolRequestParams, CallToolResult, JsonObject},
     transport::{
@@ -22,16 +30,23 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     config::KeelConfig,
+    devtools::{
+        KeelProtocolTraceClearedEvent, KeelProtocolTraceEvent, McpLatencyBreakdown,
+        McpProtocolTraceEntry, McpProtocolTraceStore, McpTraceApprovalOutcome, McpTraceDirection,
+        McpTraceStatus, McpTraceTransport, NewProtocolTrace, ProtocolTraceClearedNotifier,
+        ProtocolTraceNotifier,
+    },
     mcp_server::{
         ApprovalNotifier, KeelMcpServer, KeelSharedState, KeelToolRegistry, SnapshotNotifier,
     },
     process_host::{
-        ChildServerRecord, KeelProcessHost, ProcessHostNotifier, ProcessHostSnapshot,
-        ProcessHostUpdatedEvent, SpawnChildServerSpec,
+        ChildServerRecord, ChildToolCallResult, KeelProcessHost, ProcessHostNotifier,
+        ProcessHostSnapshot, ProcessHostUpdatedEvent, SpawnChildServerSpec,
     },
     types::{
-        KeelPingPayload, KeelPingSelfTestResult, KeelRuntimeSnapshot, KeelRuntimeUpdatedEvent,
-        KeelServerStatus, PendingToolApproval, ToolApprovalDecision, ToolApprovalRequestedEvent,
+        KeelHealthCheckResult, KeelPingPayload, KeelPingSelfTestResult, KeelRuntimeSnapshot,
+        KeelRuntimeUpdatedEvent, KeelServerStatus, PendingToolApproval, ToolApprovalDecision,
+        ToolApprovalRequestedEvent,
     },
     win_odr::{
         export_manifest, probe_odr_status, register_with_odr, unregister_from_odr,
@@ -63,6 +78,16 @@ impl KeelRuntime {
             let _ = ProcessHostUpdatedEvent(snapshot).emit(&process_host_app);
         });
 
+        let trace_app = app_handle.clone();
+        let trace_notifier: ProtocolTraceNotifier = Arc::new(move |entry| {
+            let _ = KeelProtocolTraceEvent(entry).emit(&trace_app);
+        });
+
+        let trace_cleared_app = app_handle.clone();
+        let trace_cleared_notifier: ProtocolTraceClearedNotifier = Arc::new(move |cleared| {
+            let _ = KeelProtocolTraceClearedEvent(cleared).emit(&trace_cleared_app);
+        });
+
         let approval_app = app_handle;
         let approval_notifier: ApprovalNotifier = Arc::new(move |pending| {
             let _ = ToolApprovalRequestedEvent(pending).emit(&approval_app);
@@ -80,13 +105,15 @@ impl KeelRuntime {
             Some(notifier),
             Some(approval_notifier),
             Some(process_host_notifier),
+            Some(trace_notifier),
+            Some(trace_cleared_notifier),
             true,
         )
     }
 
     #[cfg(test)]
     pub fn start_headless(config: KeelConfig, registry: KeelToolRegistry) -> Self {
-        Self::start_internal(config, registry, None, None, None, false)
+        Self::start_internal(config, registry, None, None, None, None, None, false)
     }
 
     #[cfg(test)]
@@ -95,15 +122,27 @@ impl KeelRuntime {
         registry: KeelToolRegistry,
         approval_notifier: ApprovalNotifier,
     ) -> Self {
-        Self::start_internal(config, registry, None, Some(approval_notifier), None, false)
+        Self::start_internal(
+            config,
+            registry,
+            None,
+            Some(approval_notifier),
+            None,
+            None,
+            None,
+            false,
+        )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn start_internal(
         config: KeelConfig,
         registry: KeelToolRegistry,
         notifier: Option<SnapshotNotifier>,
         approval_notifier: Option<ApprovalNotifier>,
         process_host_notifier: Option<ProcessHostNotifier>,
+        trace_notifier: Option<ProtocolTraceNotifier>,
+        trace_cleared_notifier: Option<ProtocolTraceClearedNotifier>,
         use_tauri_runtime: bool,
     ) -> Self {
         let (extra_router, extra_descriptors) = registry.into_parts();
@@ -113,14 +152,22 @@ impl KeelRuntime {
         let full_router = KeelMcpServer::merged_tool_router(extra_router);
         let mcp_tools = full_router.list_all();
 
+        let trace_store = Arc::new(McpProtocolTraceStore::new(
+            trace_notifier,
+            trace_cleared_notifier,
+        ));
         let shared = Arc::new(KeelSharedState::new(
             config.clone(),
             all_descriptors,
             mcp_tools,
+            Arc::clone(&trace_store),
             notifier,
             approval_notifier,
         ));
-        let process_host = Arc::new(KeelProcessHost::new(process_host_notifier));
+        let process_host = Arc::new(KeelProcessHost::new(
+            process_host_notifier,
+            Some(trace_store),
+        ));
         let shutdown_token = CancellationToken::new();
         let ready_notify = Arc::new(Notify::new());
 
@@ -161,13 +208,22 @@ impl KeelRuntime {
                 );
 
             let health_shared = task_shared.clone();
+            let mw_shared = task_shared.clone();
             let mcp_path = if config.mcp_path.starts_with('/') {
                 config.mcp_path.clone()
             } else {
                 format!("/{}", config.mcp_path)
             };
 
-            let app = Router::new().nest_service(&mcp_path, mcp_service).route(
+            let mcp_router =
+                Router::new()
+                    .nest_service(&mcp_path, mcp_service)
+                    .layer(middleware::from_fn(move |req: Request, next: Next| {
+                        let shared = mw_shared.clone();
+                        mcp_http_trace_middleware(shared, req, next)
+                    }));
+
+            let health_router = Router::new().route(
                 "/healthz",
                 get(move || {
                     let snap = health_shared.snapshot();
@@ -182,6 +238,8 @@ impl KeelRuntime {
                     }
                 }),
             );
+
+            let app = mcp_router.merge(health_router);
 
             task_shared.mark_running(actual_port);
             task_ready.notify_waiters();
@@ -267,6 +325,68 @@ impl KeelRuntime {
         server_id: &str,
     ) -> Result<ProcessHostSnapshot, String> {
         self.process_host.remove_server(server_id).await
+    }
+
+    pub async fn call_child_server_tool(
+        &self,
+        server_id: &str,
+        tool_name: &str,
+        arguments_json: Option<String>,
+    ) -> Result<ChildToolCallResult, String> {
+        self.process_host
+            .call_server_tool(server_id, tool_name, arguments_json)
+            .await
+    }
+
+    pub fn protocol_traces(&self) -> Vec<McpProtocolTraceEntry> {
+        self.shared.trace_store().list()
+    }
+
+    pub fn clear_protocol_traces(&self) -> u32 {
+        self.shared.trace_store().clear()
+    }
+
+    pub async fn check_healthz(&self) -> Result<KeelHealthCheckResult, String> {
+        let snap = self.snapshot();
+        let healthz_url = format!(
+            "http://{}:{}/healthz",
+            self.shared.config.bind_ip, snap.bound_port
+        );
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .timeout(Duration::from_secs(3))
+            .build()
+            .map_err(|e| format!("Failed to construct loopback healthz client: {e}"))?;
+
+        let started = Instant::now();
+        let resp = client
+            .get(&healthz_url)
+            .send()
+            .await
+            .map_err(|e| format!("Loopback health check GET {} failed: {}", healthz_url, e))?;
+        let latency_ms = started.elapsed().as_millis().min(u32::MAX as u128) as u32;
+        let status = resp.status();
+        let status_code = status.as_u16();
+        let body_ok = resp
+            .bytes()
+            .await
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .and_then(|v| v.get("ok").and_then(|b| b.as_bool()))
+            .unwrap_or(false);
+
+        let after = self.snapshot();
+        Ok(KeelHealthCheckResult {
+            ok: status.is_success() && body_ok,
+            status_code,
+            latency_ms,
+            endpoint_url: after.endpoint_url,
+            healthz_url,
+            bound_port: after.bound_port,
+            active_session_count: after.active_sessions.len().min(u32::MAX as usize) as u32,
+            total_calls: after.total_calls,
+            checked_at_iso: Utc::now().to_rfc3339(),
+        })
     }
 
     pub fn shutdown(&self) {
@@ -393,6 +513,141 @@ impl KeelRuntime {
             advertised_tools,
         })
     }
+}
+
+fn extract_header(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+async fn mcp_http_trace_middleware(
+    shared: Arc<KeelSharedState>,
+    req: Request,
+    next: Next,
+) -> Response {
+    let method = req.method().clone();
+    let uri = req.uri().to_string();
+    let req_session_id = extract_header(req.headers(), "mcp-session-id");
+    let user_agent = extract_header(req.headers(), http::header::USER_AGENT.as_str());
+    let origin = extract_header(req.headers(), http::header::ORIGIN.as_str());
+    let host = extract_header(req.headers(), http::header::HOST.as_str());
+
+    let started = Instant::now();
+    let res = next.run(req).await;
+    let elapsed_ms = started.elapsed().as_millis().min(u32::MAX as u128) as u32;
+
+    let status = res.status();
+    let res_session_id = extract_header(res.headers(), "mcp-session-id");
+
+    if method == Method::DELETE {
+        if status.is_success() {
+            if let Some(sid) = req_session_id {
+                shared.remove_http_session(&sid);
+            }
+        } else if status.is_client_error() || status.is_server_error() {
+            record_http_rejection_trace(
+                &shared,
+                &method,
+                &uri,
+                status,
+                elapsed_ms,
+                req_session_id,
+                user_agent,
+                origin,
+                host,
+            );
+        }
+    } else if status.is_success() {
+        let newly_minted = res_session_id.is_some() && req_session_id.is_none();
+        if let Some(sid) = res_session_id.or(req_session_id) {
+            shared.touch_http_session_with_init(&sid, user_agent.as_deref(), newly_minted);
+        }
+    } else if status.is_client_error() || status.is_server_error() {
+        record_http_rejection_trace(
+            &shared,
+            &method,
+            &uri,
+            status,
+            elapsed_ms,
+            req_session_id,
+            user_agent,
+            origin,
+            host,
+        );
+    }
+
+    res
+}
+
+#[allow(clippy::too_many_arguments)]
+fn record_http_rejection_trace(
+    shared: &KeelSharedState,
+    method: &Method,
+    uri: &str,
+    status: StatusCode,
+    elapsed_ms: u32,
+    req_session_id: Option<String>,
+    user_agent: Option<String>,
+    origin: Option<String>,
+    host: Option<String>,
+) {
+    let trace_status = if matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) {
+        McpTraceStatus::Blocked
+    } else {
+        McpTraceStatus::ProtocolError
+    };
+    let caller_hint = user_agent
+        .as_deref()
+        .map(|ua| ua.chars().take(48).collect::<String>())
+        .or_else(|| {
+            req_session_id
+                .as_ref()
+                .map(|sid| format!("session:{}", sid.chars().take(12).collect::<String>()))
+        });
+    let err_msg = format!(
+        "HTTP {} {} rejected with status {}",
+        method.as_str(),
+        uri,
+        status
+    );
+
+    shared.trace_store().record(NewProtocolTrace {
+        transport: McpTraceTransport::StreamableHttp,
+        direction: McpTraceDirection::Inbound,
+        target: "keeldesk".to_string(),
+        session_id: req_session_id.clone(),
+        caller_hint,
+        jsonrpc_id: None,
+        method: format!("http/{}", method.as_str()),
+        tool_name: None,
+        safety_tier: None,
+        approval_outcome: McpTraceApprovalOutcome::NotRequired,
+        status: trace_status,
+        status_code: Some(status.as_u16() as i32),
+        error_message: Some(err_msg),
+        latency: McpLatencyBreakdown {
+            total_ms: elapsed_ms,
+            approval_wait_ms: 0,
+            execution_ms: elapsed_ms,
+        },
+        request_value: json!({
+            "http_method": method.as_str(),
+            "uri": uri,
+            "host": host,
+            "origin": origin,
+            "user_agent": user_agent,
+            "mcp_session_id": req_session_id,
+        }),
+        response_value: json!({
+            "http_status": status.as_u16(),
+            "reason": status.canonical_reason().unwrap_or("Unknown"),
+        }),
+        linked_call_id: None,
+    });
 }
 
 #[cfg(test)]
@@ -1001,6 +1256,224 @@ mod tests {
             "Blocked · cancelled by caller"
         );
 
+        runtime.shutdown();
+    }
+
+    #[tokio::test]
+    async fn protocol_traces_capture_http_session_lifecycle_healthz_and_dns_rebinding_rejection() {
+        let runtime =
+            KeelRuntime::start_headless(KeelConfig::ephemeral_for_test(), KeelToolRegistry::new());
+        let snap = runtime.wait_until_ready(Duration::from_secs(3)).await;
+        assert_eq!(snap.status, KeelServerStatus::Running);
+        assert!(snap.bound_port > 0);
+        assert!(snap.active_sessions.is_empty());
+
+        let health = runtime
+            .check_healthz()
+            .await
+            .expect("loopback /healthz check should succeed");
+        assert!(health.ok);
+        assert_eq!(health.status_code, 200);
+        assert_eq!(health.bound_port, snap.bound_port);
+        assert_eq!(health.active_session_count, 0);
+
+        let http_client = reqwest::Client::builder()
+            .no_proxy()
+            .user_agent("devtools-probe-client/1.0")
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+        let transport = StreamableHttpClientTransport::with_client(
+            http_client,
+            StreamableHttpClientTransportConfig::with_uri(snap.endpoint_url.clone()),
+        );
+        let client = ().serve(transport).await.expect("client should initialize");
+
+        let tools = client.list_all_tools().await.expect("tools/list succeeds");
+        assert!(tools.iter().any(|t| t.name == "keel_ping"));
+
+        let mut args = JsonObject::new();
+        args.insert(
+            "message".to_string(),
+            serde_json::Value::String("trace-check".to_string()),
+        );
+        let ping_res = client
+            .call_tool(CallToolRequestParams::new("keel_ping").with_arguments(args))
+            .await
+            .expect("keel_ping should succeed");
+        assert_ne!(ping_res.is_error, Some(true));
+
+        let mid_snap = runtime.snapshot();
+        assert_eq!(mid_snap.active_sessions.len(), 1);
+        let session = &mid_snap.active_sessions[0];
+        assert!(session.client_name.is_some());
+        assert!(session.client_version.is_some());
+        assert!(session.protocol_version.is_some());
+        assert_eq!(
+            session.user_agent.as_deref(),
+            Some("devtools-probe-client/1.0")
+        );
+        assert!(session.request_count >= 3);
+
+        let traces = runtime.protocol_traces();
+        assert!(traces.iter().any(|t| t.method == "initialize"
+            && t.transport == McpTraceTransport::StreamableHttp
+            && t.direction == McpTraceDirection::Inbound
+            && t.status == McpTraceStatus::Succeeded));
+        assert!(traces
+            .iter()
+            .any(|t| t.method == "tools/list" && t.status == McpTraceStatus::Succeeded));
+        let ping_trace = traces
+            .iter()
+            .find(|t| t.method == "tools/call" && t.tool_name.as_deref() == Some("keel_ping"))
+            .expect("keel_ping trace should be recorded");
+        assert_eq!(
+            ping_trace.safety_tier,
+            Some(super::super::types::ToolSafetyTier::Safe)
+        );
+        assert_eq!(
+            ping_trace.approval_outcome,
+            McpTraceApprovalOutcome::NotRequired
+        );
+        assert_eq!(ping_trace.status, McpTraceStatus::Succeeded);
+        assert_eq!(ping_trace.linked_call_id, Some(1));
+        assert!(ping_trace.request_json.contains("trace-check"));
+
+        let _ = client.cancel().await;
+        // Wait briefly for DELETE session cleanup if needed.
+        let mut sessions_empty = false;
+        for _ in 0..40 {
+            if runtime.snapshot().active_sessions.is_empty() {
+                sessions_empty = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(15)).await;
+        }
+        assert!(
+            sessions_empty,
+            "active_sessions must be cleared when client cancels its HTTP session"
+        );
+
+        // Verify 403 DNS-rebinding rejection produces a Blocked http/POST trace.
+        let raw_client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let rejected = raw_client
+            .post(&snap.endpoint_url)
+            .header("Host", "evil-rebind.example.com")
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .body(r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#)
+            .send()
+            .await
+            .expect("HTTP request completes");
+        assert_eq!(rejected.status(), reqwest::StatusCode::FORBIDDEN);
+
+        let after_reject = runtime.protocol_traces();
+        let reject_trace = after_reject
+            .iter()
+            .find(|t| t.method == "http/POST" && t.status_code == Some(403))
+            .expect("403 rejection should be recorded in protocol traces");
+        assert_eq!(reject_trace.status, McpTraceStatus::Blocked);
+
+        let cleared_count = runtime.clear_protocol_traces();
+        assert!(cleared_count >= 4);
+        assert!(runtime.protocol_traces().is_empty());
+
+        runtime.shutdown();
+    }
+
+    #[tokio::test]
+    async fn approval_gate_traces_record_wait_breakdown_and_denied_status() {
+        let runtime = KeelRuntime::start_headless(
+            KeelConfig::ephemeral_for_test(),
+            registry_with_guarded_tool(),
+        );
+        let snap = runtime.wait_until_ready(Duration::from_secs(3)).await;
+        let client = connect_test_mcp_client(&snap.endpoint_url).await;
+
+        // 1. ApprovedOnce with measurable approval_wait_ms
+        let call_client = client.peer().clone();
+        let call_handle = tokio::spawn(async move {
+            call_client
+                .call_tool(
+                    CallToolRequestParams::new("guarded_test_action")
+                        .with_arguments(target_args("latency-probe")),
+                )
+                .await
+        });
+
+        let pending = wait_for_pending_approval(&runtime).await;
+        tokio::time::sleep(Duration::from_millis(45)).await;
+        runtime
+            .resolve_tool_approval(&pending.request_id, ToolApprovalDecision::ApproveOnce)
+            .expect("ApproveOnce should resolve");
+        let call_res = call_handle
+            .await
+            .expect("join")
+            .expect("approved call succeeds");
+        assert_ne!(call_res.is_error, Some(true));
+
+        let traces_after_approve = runtime.protocol_traces();
+        let approved_trace = traces_after_approve
+            .iter()
+            .find(|t| {
+                t.method == "tools/call" && t.tool_name.as_deref() == Some("guarded_test_action")
+            })
+            .expect("approved trace recorded");
+        assert_eq!(
+            approved_trace.safety_tier,
+            Some(super::super::types::ToolSafetyTier::ConfirmRequired)
+        );
+        assert_eq!(
+            approved_trace.approval_outcome,
+            McpTraceApprovalOutcome::ApprovedOnce
+        );
+        assert_eq!(approved_trace.status, McpTraceStatus::Succeeded);
+        assert_eq!(approved_trace.linked_call_id, Some(1));
+        assert!(
+            approved_trace.latency.approval_wait_ms >= 30,
+            "expected approval_wait_ms >= 30, got {}",
+            approved_trace.latency.approval_wait_ms
+        );
+        assert!(approved_trace.latency.total_ms >= approved_trace.latency.approval_wait_ms);
+        assert!(approved_trace.latency.execution_ms <= approved_trace.latency.total_ms);
+
+        // 2. Denied call produces McpTraceStatus::Blocked & McpTraceApprovalOutcome::Denied
+        let deny_client = client.peer().clone();
+        let deny_handle = tokio::spawn(async move {
+            deny_client
+                .call_tool(
+                    CallToolRequestParams::new("guarded_test_action")
+                        .with_arguments(target_args("deny-probe")),
+                )
+                .await
+        });
+        let deny_pending = wait_for_pending_approval(&runtime).await;
+        runtime
+            .resolve_tool_approval(&deny_pending.request_id, ToolApprovalDecision::Deny)
+            .expect("Deny should resolve");
+        let deny_res = deny_handle
+            .await
+            .expect("join")
+            .expect("denied call returns tool error");
+        assert_eq!(deny_res.is_error, Some(true));
+
+        let traces_after_deny = runtime.protocol_traces();
+        let denied_trace = traces_after_deny
+            .iter()
+            .find(|t| {
+                t.method == "tools/call"
+                    && t.tool_name.as_deref() == Some("guarded_test_action")
+                    && t.linked_call_id == Some(2)
+            })
+            .expect("denied trace recorded");
+        assert_eq!(
+            denied_trace.approval_outcome,
+            McpTraceApprovalOutcome::Denied
+        );
+        assert_eq!(denied_trace.status, McpTraceStatus::Blocked);
+        assert_eq!(denied_trace.latency.execution_ms, 0);
+
+        let _ = client.cancel().await;
         runtime.shutdown();
     }
 }

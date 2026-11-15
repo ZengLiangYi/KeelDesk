@@ -17,6 +17,10 @@ export const commands = {
 	startKeelChildServer: (spec: SpawnChildServerSpec) => typedError<ChildServerRecord, string>(__TAURI_INVOKE("start_keel_child_server", { spec })),
 	stopKeelChildServer: (serverId: string) => typedError<ChildServerRecord, string>(__TAURI_INVOKE("stop_keel_child_server", { serverId })),
 	removeKeelChildServer: (serverId: string) => typedError<ProcessHostSnapshot, string>(__TAURI_INVOKE("remove_keel_child_server", { serverId })),
+	checkKeelHealthz: () => typedError<KeelHealthCheckResult, string>(__TAURI_INVOKE("check_keel_healthz")),
+	getKeelProtocolTraces: () => typedError<McpProtocolTraceEntry[], string>(__TAURI_INVOKE("get_keel_protocol_traces")),
+	clearKeelProtocolTraces: () => typedError<number, string>(__TAURI_INVOKE("clear_keel_protocol_traces")),
+	callKeelChildServerTool: (serverId: string, toolName: string, argumentsJson: string | null) => typedError<ChildToolCallResult, string>(__TAURI_INVOKE("call_keel_child_server_tool", { serverId, toolName, argumentsJson })),
 	getWin11HostSummary: () => __TAURI_INVOKE<Win11HostSummary>("get_win11_host_summary"),
 	scanWin11DevEnv: () => typedError<DevEnvScanReport, string>(__TAURI_INVOKE("scan_win11_dev_env")),
 	listWin11ActivePorts: (port: number | null, processFilter: string | null) => typedError<ActivePortReport, string>(__TAURI_INVOKE("list_win11_active_ports", { port, processFilter })),
@@ -25,6 +29,8 @@ export const commands = {
 
 /** Events */
 export const events = {
+	keelProtocolTraceClearedEvent: makeEvent<KeelProtocolTraceClearedEvent>("keel-protocol-trace-cleared-event"),
+	keelProtocolTraceEvent: makeEvent<KeelProtocolTraceEvent>("keel-protocol-trace-event"),
 	keelRuntimeUpdatedEvent: makeEvent<KeelRuntimeUpdatedEvent>("keel-runtime-updated-event"),
 	processHostUpdatedEvent: makeEvent<ProcessHostUpdatedEvent>("process-host-updated-event"),
 	toolApprovalRequestedEvent: makeEvent<ToolApprovalRequestedEvent>("tool-approval-requested-event"),
@@ -83,6 +89,15 @@ export type ChildServerRecord = {
 
 export type ChildServerStatus = "stopped" | "starting" | "running" | "failed";
 
+export type ChildToolCallResult = {
+	server_id: string,
+	tool_name: string,
+	duration_ms: number,
+	is_error: boolean,
+	response_json: string,
+	trace_seq: number | null,
+};
+
 export type DevEnvScanReport = {
 	scanned_at_iso: string,
 	host: Win11HostSummary,
@@ -98,6 +113,18 @@ export type DevToolProbe = {
 	version: string | null,
 	executable_path: string | null,
 	probe_ms: number,
+};
+
+export type KeelHealthCheckResult = {
+	ok: boolean,
+	status_code: number,
+	latency_ms: number,
+	endpoint_url: string,
+	healthz_url: string,
+	bound_port: number,
+	active_session_count: number,
+	total_calls: number,
+	checked_at_iso: string,
 };
 
 export type KeelPingPayload = {
@@ -116,10 +143,15 @@ export type KeelPingSelfTestResult = {
 	advertised_tools: string[],
 };
 
+export type KeelProtocolTraceClearedEvent = number;
+
+export type KeelProtocolTraceEvent = McpProtocolTraceEntry;
+
 export type KeelRuntimeSnapshot = {
 	status: KeelServerStatus,
 	endpoint_url: string,
 	bind_addr: string,
+	bound_port: number,
 	server_name: string,
 	server_version: string,
 	started_at_iso: string | null,
@@ -129,6 +161,7 @@ export type KeelRuntimeSnapshot = {
 	recent_calls: ToolCallLogEntry[],
 	pending_approvals: PendingToolApproval[],
 	session_allowlist: SessionAllowlistEntry[],
+	active_sessions: McpSessionSummary[],
 };
 
 export type KeelRuntimeUpdatedEvent = KeelRuntimeSnapshot;
@@ -150,6 +183,57 @@ export type KillPortProcessResult = {
 	process_names: string[],
 	message: string,
 };
+
+export type McpLatencyBreakdown = {
+	total_ms: number,
+	approval_wait_ms: number,
+	execution_ms: number,
+};
+
+export type McpProtocolTraceEntry = {
+	seq: number,
+	timestamp_iso: string,
+	transport: McpTraceTransport,
+	direction: McpTraceDirection,
+	target: string,
+	session_id: string | null,
+	caller_hint: string | null,
+	jsonrpc_id: string | null,
+	method: string,
+	tool_name: string | null,
+	safety_tier: ToolSafetyTier | null,
+	approval_outcome: McpTraceApprovalOutcome,
+	status: McpTraceStatus,
+	status_code: number | null,
+	error_message: string | null,
+	latency: McpLatencyBreakdown,
+	request_json: string,
+	response_json: string,
+	request_bytes: number,
+	response_bytes: number,
+	request_truncated: boolean,
+	response_truncated: boolean,
+	linked_call_id: number | null,
+};
+
+export type McpSessionSummary = {
+	session_id: string,
+	client_name: string | null,
+	client_version: string | null,
+	protocol_version: string | null,
+	user_agent: string | null,
+	connected_at_iso: string,
+	last_active_at_iso: string,
+	request_count: number,
+};
+
+export type McpTraceApprovalOutcome = "not_required" | "approved_once" | "approved_for_session" | "session_allowlisted" | "denied" | "timed_out" | "cancelled";
+
+export type McpTraceDirection = "inbound" | "outbound";
+
+export type McpTraceStatus = "succeeded" | "tool_error" | "protocol_error" | "blocked";
+
+export type McpTraceTransport = "streamable_http" | "stdio_child";
 
 export type OdrActionOutcome = {
 	executed_cli: boolean,

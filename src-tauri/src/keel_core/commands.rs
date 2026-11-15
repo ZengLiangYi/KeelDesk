@@ -1,8 +1,12 @@
 use super::{
-    process_host::{ChildServerRecord, ProcessHostSnapshot, SpawnChildServerSpec},
+    devtools::McpProtocolTraceEntry,
+    process_host::{
+        ChildServerRecord, ChildToolCallResult, ProcessHostSnapshot, SpawnChildServerSpec,
+    },
     runtime::KeelRuntime,
     types::{
-        KeelPingSelfTestResult, KeelRuntimeSnapshot, PendingToolApproval, ToolApprovalDecision,
+        KeelHealthCheckResult, KeelPingSelfTestResult, KeelRuntimeSnapshot, PendingToolApproval,
+        ToolApprovalDecision,
     },
     win_odr::{OdrActionOutcome, OdrRegisterMode, OdrStatusReport},
 };
@@ -110,4 +114,41 @@ pub async fn remove_keel_child_server(
     server_id: String,
 ) -> Result<ProcessHostSnapshot, String> {
     runtime.remove_child_server(&server_id).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn check_keel_healthz(
+    runtime: tauri::State<'_, KeelRuntime>,
+) -> Result<KeelHealthCheckResult, String> {
+    runtime.check_healthz().await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_keel_protocol_traces(
+    runtime: tauri::State<'_, KeelRuntime>,
+) -> Result<Vec<McpProtocolTraceEntry>, String> {
+    Ok(runtime.protocol_traces())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn clear_keel_protocol_traces(
+    runtime: tauri::State<'_, KeelRuntime>,
+) -> Result<u32, String> {
+    Ok(runtime.clear_protocol_traces())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn call_keel_child_server_tool(
+    runtime: tauri::State<'_, KeelRuntime>,
+    server_id: String,
+    tool_name: String,
+    arguments_json: Option<String>,
+) -> Result<ChildToolCallResult, String> {
+    runtime
+        .call_child_server_tool(&server_id, &tool_name, arguments_json)
+        .await
 }

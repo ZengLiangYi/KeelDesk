@@ -12,8 +12,13 @@ use std::{
 };
 
 use chrono::Utc;
-use rmcp::{service::RunningService, RoleClient, ServiceExt};
+use rmcp::{
+    model::{CallToolRequestParams, CallToolResult, JsonObject},
+    service::RunningService,
+    RoleClient, ServiceExt,
+};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, ChildStderr, ChildStdin, ChildStdout, Command},
@@ -21,13 +26,21 @@ use tokio::{
     task::JoinHandle,
 };
 
-use super::win32_env::{
-    build_merged_windows_path, decode_cli_bytes, new_hidden_std_command, resolve_executable_in_path,
+use super::{
+    devtools::{
+        McpLatencyBreakdown, McpProtocolTraceStore, McpTraceApprovalOutcome, McpTraceDirection,
+        McpTraceStatus, McpTraceTransport, NewProtocolTrace,
+    },
+    win32_env::{
+        build_merged_windows_path, decode_cli_bytes, new_hidden_std_command,
+        resolve_executable_in_path,
+    },
 };
 
 const MAX_STDERR_LINES: usize = 100;
 const MAX_STDERR_LINE_CHARS: usize = 400;
 const MCP_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(12);
+const CHILD_TOOL_CALL_TIMEOUT: Duration = Duration::from_secs(15);
 const STOP_WAIT_TIMEOUT: Duration = Duration::from_secs(2);
 
 const STOP_REASON_NONE: u8 = 0;
@@ -105,6 +118,16 @@ pub struct ProcessHostSnapshot {
     pub merged_path_entries: u32,
     pub running_count: u32,
     pub servers: Vec<ChildServerRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct ChildToolCallResult {
+    pub server_id: String,
+    pub tool_name: String,
+    pub duration_ms: u32,
+    pub is_error: bool,
+    pub response_json: String,
+    pub trace_seq: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, tauri_specta::Event)]
@@ -273,10 +296,14 @@ pub struct KeelProcessHost {
     inner: Arc<Mutex<ProcessHostInner>>,
     op_locks: Mutex<HashMap<String, Arc<AsyncMutex<()>>>>,
     notifier: Option<ProcessHostNotifier>,
+    trace_store: Option<Arc<McpProtocolTraceStore>>,
 }
 
 impl KeelProcessHost {
-    pub fn new(notifier: Option<ProcessHostNotifier>) -> Self {
+    pub fn new(
+        notifier: Option<ProcessHostNotifier>,
+        trace_store: Option<Arc<McpProtocolTraceStore>>,
+    ) -> Self {
         let (_, merged_path_entries) = build_merged_windows_path();
         Self {
             inner: Arc::new(Mutex::new(ProcessHostInner {
@@ -288,6 +315,7 @@ impl KeelProcessHost {
             })),
             op_locks: Mutex::new(HashMap::new()),
             notifier,
+            trace_store,
         }
     }
 
@@ -531,9 +559,16 @@ impl KeelProcessHost {
 
         if validated.perform_mcp_handshake {
             let handshake_started = Instant::now();
+            let init_completed = Arc::new(AtomicBool::new(false));
             let handshake_res = tokio::time::timeout(
                 MCP_HANDSHAKE_TIMEOUT,
-                perform_stdio_mcp_handshake(stdout, stdin),
+                perform_stdio_mcp_handshake(
+                    &validated.id,
+                    stdout,
+                    stdin,
+                    self.trace_store.as_ref(),
+                    &init_completed,
+                ),
             )
             .await;
 
@@ -591,6 +626,49 @@ impl KeelProcessHost {
                         MCP_HANDSHAKE_TIMEOUT.as_secs(),
                         validated.id
                     );
+                    if let Some(ref store) = self.trace_store {
+                        let elapsed_ms = handshake_started
+                            .elapsed()
+                            .as_millis()
+                            .min(u32::MAX as u128) as u32;
+                        let method = if init_completed.load(Ordering::Acquire) {
+                            "tools/list"
+                        } else {
+                            "initialize"
+                        };
+                        store.record(NewProtocolTrace {
+                            transport: McpTraceTransport::StdioChild,
+                            direction: McpTraceDirection::Outbound,
+                            target: format!("child:{}", validated.id),
+                            session_id: None,
+                            caller_hint: Some("keeldesk-process-host".to_string()),
+                            jsonrpc_id: None,
+                            method: method.to_string(),
+                            tool_name: None,
+                            safety_tier: None,
+                            approval_outcome: McpTraceApprovalOutcome::NotRequired,
+                            status: McpTraceStatus::ProtocolError,
+                            status_code: None,
+                            error_message: Some(err_msg.clone()),
+                            latency: McpLatencyBreakdown {
+                                total_ms: elapsed_ms,
+                                approval_wait_ms: 0,
+                                execution_ms: elapsed_ms,
+                            },
+                            request_value: json!({
+                                "jsonrpc": "2.0",
+                                "method": method,
+                                "params": {}
+                            }),
+                            response_value: json!({
+                                "jsonrpc": "2.0",
+                                "error": {
+                                    "message": err_msg,
+                                }
+                            }),
+                            linked_call_id: None,
+                        });
+                    }
                     active_handle.terminate_and_signal(STOP_REASON_HANDSHAKE_FAILED);
                     wait_for_exit_or_stderr(&mut active_handle).await;
                     self.mark_entry_failed(&validated.id, generation, err_msg.clone());
@@ -727,6 +805,221 @@ impl KeelProcessHost {
         Ok(snap)
     }
 
+    pub async fn call_server_tool(
+        &self,
+        server_id: &str,
+        tool_name: &str,
+        arguments_json: Option<String>,
+    ) -> Result<ChildToolCallResult, String> {
+        let trimmed_id = server_id.trim();
+        validate_server_id(trimmed_id)?;
+
+        let trimmed_tool = tool_name.trim();
+        if trimmed_tool.is_empty() || trimmed_tool.contains(['\0', '\r', '\n']) {
+            return Err(
+                "Tool name must be non-empty without NUL or newline characters.".to_string(),
+            );
+        }
+
+        let args: JsonObject = match arguments_json.as_deref().map(str::trim) {
+            None | Some("") => JsonObject::new(),
+            Some(raw) => {
+                let parsed: serde_json::Value = serde_json::from_str(raw)
+                    .map_err(|err| format!("Invalid tool arguments JSON: {err}"))?;
+                match parsed {
+                    serde_json::Value::Object(map) => map,
+                    _ => {
+                        return Err(
+                            "Tool arguments JSON must be a JSON object (e.g. {\"key\": \"value\"})."
+                                .to_string(),
+                        );
+                    }
+                }
+            }
+        };
+
+        let peer = {
+            let guard = self
+                .inner
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let Some(entry) = guard.entries.get(trimmed_id) else {
+                return Err(format!("Child MCP server '{trimmed_id}' was not found."));
+            };
+            match guard.active.get(trimmed_id) {
+                Some(ActiveChildHandle {
+                    transport: Some(ActiveTransport::McpClient(ref client)),
+                    ..
+                }) => client.peer().clone(),
+                Some(ActiveChildHandle {
+                    transport: Some(ActiveTransport::PlainStdio { .. }),
+                    ..
+                }) => {
+                    return Err(format!(
+                        "Child server '{trimmed_id}' was started without an MCP stdio handshake."
+                    ));
+                }
+                _ => {
+                    return Err(format!(
+                        "Child MCP server '{trimmed_id}' is not currently running (status: {:?}).",
+                        entry.record.status
+                    ));
+                }
+            }
+        };
+
+        let target = format!("child:{trimmed_id}");
+        let req_envelope = json!({
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": trimmed_tool,
+                "arguments": &args,
+            }
+        });
+
+        let started = Instant::now();
+        let call_outcome = tokio::time::timeout(
+            CHILD_TOOL_CALL_TIMEOUT,
+            peer.call_tool(
+                CallToolRequestParams::new(trimmed_tool.to_string()).with_arguments(args),
+            ),
+        )
+        .await;
+        let duration_ms = started.elapsed().as_millis().min(u32::MAX as u128) as u32;
+
+        match call_outcome {
+            Ok(Ok(call_res)) => {
+                let is_error = call_res.is_error == Some(true);
+                let resp_value = serde_json::to_value(&call_res).unwrap_or_else(|_| json!({}));
+                let response_json = serde_json::to_string_pretty(&resp_value)
+                    .unwrap_or_else(|_| resp_value.to_string());
+                let status = if is_error {
+                    McpTraceStatus::ToolError
+                } else {
+                    McpTraceStatus::Succeeded
+                };
+                let error_message = if is_error {
+                    extract_child_tool_error_text(&call_res)
+                } else {
+                    None
+                };
+
+                let trace_seq = self.trace_store.as_ref().map(|store| {
+                    store
+                        .record(NewProtocolTrace {
+                            transport: McpTraceTransport::StdioChild,
+                            direction: McpTraceDirection::Outbound,
+                            target: target.clone(),
+                            session_id: None,
+                            caller_hint: Some("keeldesk-process-host".to_string()),
+                            jsonrpc_id: None,
+                            method: "tools/call".to_string(),
+                            tool_name: Some(trimmed_tool.to_string()),
+                            safety_tier: None,
+                            approval_outcome: McpTraceApprovalOutcome::NotRequired,
+                            status,
+                            status_code: None,
+                            error_message,
+                            latency: McpLatencyBreakdown {
+                                total_ms: duration_ms,
+                                approval_wait_ms: 0,
+                                execution_ms: duration_ms,
+                            },
+                            request_value: req_envelope,
+                            response_value: json!({
+                                "jsonrpc": "2.0",
+                                "result": resp_value,
+                            }),
+                            linked_call_id: None,
+                        })
+                        .seq
+                });
+
+                Ok(ChildToolCallResult {
+                    server_id: trimmed_id.to_string(),
+                    tool_name: trimmed_tool.to_string(),
+                    duration_ms,
+                    is_error,
+                    response_json,
+                    trace_seq,
+                })
+            }
+            Ok(Err(err)) => {
+                let err_msg =
+                    format!("Child server '{trimmed_id}' tool '{trimmed_tool}' call failed: {err}");
+                if let Some(ref store) = self.trace_store {
+                    store.record(NewProtocolTrace {
+                        transport: McpTraceTransport::StdioChild,
+                        direction: McpTraceDirection::Outbound,
+                        target,
+                        session_id: None,
+                        caller_hint: Some("keeldesk-process-host".to_string()),
+                        jsonrpc_id: None,
+                        method: "tools/call".to_string(),
+                        tool_name: Some(trimmed_tool.to_string()),
+                        safety_tier: None,
+                        approval_outcome: McpTraceApprovalOutcome::NotRequired,
+                        status: McpTraceStatus::ProtocolError,
+                        status_code: None,
+                        error_message: Some(err_msg.clone()),
+                        latency: McpLatencyBreakdown {
+                            total_ms: duration_ms,
+                            approval_wait_ms: 0,
+                            execution_ms: duration_ms,
+                        },
+                        request_value: req_envelope,
+                        response_value: json!({
+                            "jsonrpc": "2.0",
+                            "error": {
+                                "message": err.to_string(),
+                            }
+                        }),
+                        linked_call_id: None,
+                    });
+                }
+                Err(err_msg)
+            }
+            Err(_) => {
+                let err_msg = format!(
+                    "Timed out after {}s calling tool '{trimmed_tool}' on child server '{trimmed_id}'.",
+                    CHILD_TOOL_CALL_TIMEOUT.as_secs()
+                );
+                if let Some(ref store) = self.trace_store {
+                    store.record(NewProtocolTrace {
+                        transport: McpTraceTransport::StdioChild,
+                        direction: McpTraceDirection::Outbound,
+                        target,
+                        session_id: None,
+                        caller_hint: Some("keeldesk-process-host".to_string()),
+                        jsonrpc_id: None,
+                        method: "tools/call".to_string(),
+                        tool_name: Some(trimmed_tool.to_string()),
+                        safety_tier: None,
+                        approval_outcome: McpTraceApprovalOutcome::NotRequired,
+                        status: McpTraceStatus::ProtocolError,
+                        status_code: None,
+                        error_message: Some(err_msg.clone()),
+                        latency: McpLatencyBreakdown {
+                            total_ms: duration_ms,
+                            approval_wait_ms: 0,
+                            execution_ms: duration_ms,
+                        },
+                        request_value: req_envelope,
+                        response_value: json!({
+                            "jsonrpc": "2.0",
+                            "error": {
+                                "message": err_msg,
+                            }
+                        }),
+                        linked_call_id: None,
+                    });
+                }
+                Err(err_msg)
+            }
+        }
+    }
+
     pub fn shutdown_all(&self) {
         let now_iso = Utc::now().to_rfc3339();
         let drained = {
@@ -817,9 +1110,20 @@ fn build_snapshot_from_inner(inner: &Arc<Mutex<ProcessHostInner>>) -> ProcessHos
     }
 }
 
+fn extract_child_tool_error_text(res: &CallToolResult) -> Option<String> {
+    res.content
+        .iter()
+        .find_map(|block| block.as_text().map(|t| t.text.trim()))
+        .filter(|text| !text.is_empty())
+        .map(ToOwned::to_owned)
+}
+
 async fn perform_stdio_mcp_handshake(
+    server_id: &str,
     stdout: ChildStdout,
     stdin: ChildStdin,
+    trace_store: Option<&Arc<McpProtocolTraceStore>>,
+    init_completed: &Arc<AtomicBool>,
 ) -> Result<
     (
         RunningService<RoleClient, ()>,
@@ -829,10 +1133,98 @@ async fn perform_stdio_mcp_handshake(
     ),
     String,
 > {
-    let client = ()
-        .serve((stdout, stdin))
-        .await
-        .map_err(|err| format!("MCP stdio initialize handshake failed: {err}"))?;
+    let target = format!("child:{server_id}");
+    let init_started = Instant::now();
+    let client = match ().serve((stdout, stdin)).await {
+        Ok(client) => {
+            init_completed.store(true, Ordering::Release);
+            let init_ms = init_started.elapsed().as_millis().min(u32::MAX as u128) as u32;
+            if let Some(store) = trace_store {
+                store.record(NewProtocolTrace {
+                    transport: McpTraceTransport::StdioChild,
+                    direction: McpTraceDirection::Outbound,
+                    target: target.clone(),
+                    session_id: None,
+                    caller_hint: Some("keeldesk-process-host".to_string()),
+                    jsonrpc_id: None,
+                    method: "initialize".to_string(),
+                    tool_name: None,
+                    safety_tier: None,
+                    approval_outcome: McpTraceApprovalOutcome::NotRequired,
+                    status: McpTraceStatus::Succeeded,
+                    status_code: None,
+                    error_message: None,
+                    latency: McpLatencyBreakdown {
+                        total_ms: init_ms,
+                        approval_wait_ms: 0,
+                        execution_ms: init_ms,
+                    },
+                    request_value: json!({
+                        "jsonrpc": "2.0",
+                        "method": "initialize",
+                        "params": {
+                            "clientInfo": {
+                                "name": "keeldesk",
+                                "version": env!("CARGO_PKG_VERSION"),
+                            },
+                            "capabilities": {}
+                        }
+                    }),
+                    response_value: json!({
+                        "jsonrpc": "2.0",
+                        "result": client.peer_info(),
+                    }),
+                    linked_call_id: None,
+                });
+            }
+            client
+        }
+        Err(err) => {
+            let init_ms = init_started.elapsed().as_millis().min(u32::MAX as u128) as u32;
+            let err_msg = format!("MCP stdio initialize handshake failed: {err}");
+            if let Some(store) = trace_store {
+                store.record(NewProtocolTrace {
+                    transport: McpTraceTransport::StdioChild,
+                    direction: McpTraceDirection::Outbound,
+                    target,
+                    session_id: None,
+                    caller_hint: Some("keeldesk-process-host".to_string()),
+                    jsonrpc_id: None,
+                    method: "initialize".to_string(),
+                    tool_name: None,
+                    safety_tier: None,
+                    approval_outcome: McpTraceApprovalOutcome::NotRequired,
+                    status: McpTraceStatus::ProtocolError,
+                    status_code: None,
+                    error_message: Some(err_msg.clone()),
+                    latency: McpLatencyBreakdown {
+                        total_ms: init_ms,
+                        approval_wait_ms: 0,
+                        execution_ms: init_ms,
+                    },
+                    request_value: json!({
+                        "jsonrpc": "2.0",
+                        "method": "initialize",
+                        "params": {
+                            "clientInfo": {
+                                "name": "keeldesk",
+                                "version": env!("CARGO_PKG_VERSION"),
+                            },
+                            "capabilities": {}
+                        }
+                    }),
+                    response_value: json!({
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "message": err.to_string(),
+                        }
+                    }),
+                    linked_call_id: None,
+                });
+            }
+            return Err(err_msg);
+        }
+    };
 
     let (server_info_name, server_info_version) = match client.peer_info() {
         Some(info) => (
@@ -842,18 +1234,91 @@ async fn perform_stdio_mcp_handshake(
         None => (None, None),
     };
 
+    let list_started = Instant::now();
     let tools = match client.list_all_tools().await {
-        Ok(list) => list
-            .into_iter()
-            .map(|tool| ChildMcpToolSummary {
-                name: tool.name.to_string(),
-                description: tool.description.as_deref().unwrap_or_default().to_string(),
-            })
-            .collect(),
+        Ok(list) => {
+            let list_ms = list_started.elapsed().as_millis().min(u32::MAX as u128) as u32;
+            if let Some(store) = trace_store {
+                store.record(NewProtocolTrace {
+                    transport: McpTraceTransport::StdioChild,
+                    direction: McpTraceDirection::Outbound,
+                    target,
+                    session_id: None,
+                    caller_hint: Some("keeldesk-process-host".to_string()),
+                    jsonrpc_id: None,
+                    method: "tools/list".to_string(),
+                    tool_name: None,
+                    safety_tier: None,
+                    approval_outcome: McpTraceApprovalOutcome::NotRequired,
+                    status: McpTraceStatus::Succeeded,
+                    status_code: None,
+                    error_message: None,
+                    latency: McpLatencyBreakdown {
+                        total_ms: list_ms,
+                        approval_wait_ms: 0,
+                        execution_ms: list_ms,
+                    },
+                    request_value: json!({
+                        "jsonrpc": "2.0",
+                        "method": "tools/list",
+                        "params": {}
+                    }),
+                    response_value: json!({
+                        "jsonrpc": "2.0",
+                        "result": {
+                            "tools": &list,
+                        }
+                    }),
+                    linked_call_id: None,
+                });
+            }
+            list.into_iter()
+                .map(|tool| ChildMcpToolSummary {
+                    name: tool.name.to_string(),
+                    description: tool.description.as_deref().unwrap_or_default().to_string(),
+                })
+                .collect()
+        }
         Err(err) => {
+            let list_ms = list_started.elapsed().as_millis().min(u32::MAX as u128) as u32;
+            let err_msg = format!("MCP stdio tools/list failed: {err}");
+            if let Some(store) = trace_store {
+                store.record(NewProtocolTrace {
+                    transport: McpTraceTransport::StdioChild,
+                    direction: McpTraceDirection::Outbound,
+                    target,
+                    session_id: None,
+                    caller_hint: Some("keeldesk-process-host".to_string()),
+                    jsonrpc_id: None,
+                    method: "tools/list".to_string(),
+                    tool_name: None,
+                    safety_tier: None,
+                    approval_outcome: McpTraceApprovalOutcome::NotRequired,
+                    status: McpTraceStatus::ProtocolError,
+                    status_code: None,
+                    error_message: Some(err_msg.clone()),
+                    latency: McpLatencyBreakdown {
+                        total_ms: list_ms,
+                        approval_wait_ms: 0,
+                        execution_ms: list_ms,
+                    },
+                    request_value: json!({
+                        "jsonrpc": "2.0",
+                        "method": "tools/list",
+                        "params": {}
+                    }),
+                    response_value: json!({
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "message": err.to_string(),
+                        }
+                    }),
+                    linked_call_id: None,
+                });
+            }
             client.cancellation_token().cancel();
             drop(client);
-            return Err(format!("MCP stdio tools/list failed: {err}"));
+            return Err(err_msg);
         }
     };
 
@@ -1522,5 +1987,171 @@ $p.WaitForExit()
             exit_wait, WAIT_OBJECT_0,
             "Win32 Job Object must terminate grandchild process on runtime shutdown"
         );
+    }
+
+    #[tokio::test]
+    async fn live_stdio_child_handshake_and_tool_call_record_protocol_traces() {
+        use super::super::devtools::{McpTraceDirection, McpTraceStatus, McpTraceTransport};
+
+        let runtime =
+            KeelRuntime::start_headless(KeelConfig::ephemeral_for_test(), KeelToolRegistry::new());
+        let _guard = RuntimeShutdownGuard(runtime.clone());
+
+        let ps_exe = resolve_powershell_for_test();
+        let ps_script = r#"
+while ($null -ne ($line = [Console]::In.ReadLine())) {
+    if ([string]::IsNullOrWhiteSpace($line)) { continue }
+    $req = $line | ConvertFrom-Json
+    if ($null -eq $req.id) { continue }
+    if ($req.method -eq 'initialize') {
+        $resp = @{
+            jsonrpc = '2.0'
+            id = $req.id
+            result = @{
+                protocolVersion = '2025-03-26'
+                capabilities = @{ tools = @{} }
+                serverInfo = @{ name = 'devtools-child-mcp'; version = '0.9.0' }
+            }
+        } | ConvertTo-Json -Compress -Depth 10
+        [Console]::Out.WriteLine($resp)
+        [Console]::Out.Flush()
+    } elseif ($req.method -eq 'tools/list') {
+        $resp = @{
+            jsonrpc = '2.0'
+            id = $req.id
+            result = @{
+                tools = @(
+                    @{
+                        name = 'echo_child'
+                        description = 'Echoes text from child stdio server'
+                        inputSchema = @{
+                            type = 'object'
+                            properties = @{ text = @{ type = 'string' } }
+                        }
+                    }
+                )
+            }
+        } | ConvertTo-Json -Compress -Depth 10
+        [Console]::Out.WriteLine($resp)
+        [Console]::Out.Flush()
+    } elseif ($req.method -eq 'tools/call') {
+        $argText = ''
+        if ($null -ne $req.params.arguments -and $null -ne $req.params.arguments.text) {
+            $argText = [string]$req.params.arguments.text
+        }
+        $isErr = ($argText -eq 'boom')
+        $resp = @{
+            jsonrpc = '2.0'
+            id = $req.id
+            result = @{
+                isError = $isErr
+                content = @(
+                    @{
+                        type = 'text'
+                        text = "child-echo:$argText"
+                    }
+                )
+            }
+        } | ConvertTo-Json -Compress -Depth 10
+        [Console]::Out.WriteLine($resp)
+        [Console]::Out.Flush()
+    }
+}
+"#;
+
+        let record = runtime
+            .start_child_server(SpawnChildServerSpec {
+                id: "trace-child".to_string(),
+                name: "Trace Child MCP".to_string(),
+                command: ps_exe,
+                args: vec![
+                    "-NoLogo".to_string(),
+                    "-NoProfile".to_string(),
+                    "-NonInteractive".to_string(),
+                    "-Command".to_string(),
+                    ps_script.to_string(),
+                ],
+                cwd: None,
+                env: Vec::new(),
+                perform_mcp_handshake: true,
+            })
+            .await
+            .expect("child MCP server should start and complete handshake");
+        assert_eq!(record.status, ChildServerStatus::Running);
+
+        // Verify invalid non-object JSON arguments fail cleanly before sending.
+        let bad_args_err = runtime
+            .call_child_server_tool("trace-child", "echo_child", Some("[1, 2]".to_string()))
+            .await
+            .expect_err("non-object JSON arguments must be rejected");
+        assert!(bad_args_err.contains("JSON object"));
+
+        // Successful tool invocation
+        let ok_res = runtime
+            .call_child_server_tool(
+                "trace-child",
+                "echo_child",
+                Some(r#"{"text":"win11-stdio"}"#.to_string()),
+            )
+            .await
+            .expect("child tool call should succeed");
+        assert_eq!(ok_res.server_id, "trace-child");
+        assert_eq!(ok_res.tool_name, "echo_child");
+        assert!(!ok_res.is_error);
+        assert!(ok_res.trace_seq.is_some());
+        assert!(ok_res.response_json.contains("child-echo:win11-stdio"));
+
+        // Tool-level error response
+        let err_res = runtime
+            .call_child_server_tool(
+                "trace-child",
+                "echo_child",
+                Some(r#"{"text":"boom"}"#.to_string()),
+            )
+            .await
+            .expect("tool error still returns ChildToolCallResult");
+        assert!(err_res.is_error);
+        assert!(err_res.trace_seq.is_some());
+
+        let traces = runtime.protocol_traces();
+        assert!(traces
+            .iter()
+            .any(|t| t.transport == McpTraceTransport::StdioChild
+                && t.direction == McpTraceDirection::Outbound
+                && t.target == "child:trace-child"
+                && t.method == "initialize"
+                && t.status == McpTraceStatus::Succeeded));
+        assert!(traces
+            .iter()
+            .any(|t| t.transport == McpTraceTransport::StdioChild
+                && t.target == "child:trace-child"
+                && t.method == "tools/list"
+                && t.status == McpTraceStatus::Succeeded));
+        assert!(traces
+            .iter()
+            .any(|t| t.transport == McpTraceTransport::StdioChild
+                && t.target == "child:trace-child"
+                && t.method == "tools/call"
+                && t.tool_name.as_deref() == Some("echo_child")
+                && t.status == McpTraceStatus::Succeeded
+                && t.seq == ok_res.trace_seq.unwrap()));
+        assert!(traces
+            .iter()
+            .any(|t| t.transport == McpTraceTransport::StdioChild
+                && t.target == "child:trace-child"
+                && t.method == "tools/call"
+                && t.status == McpTraceStatus::ToolError
+                && t.seq == err_res.trace_seq.unwrap()));
+
+        runtime
+            .stop_child_server("trace-child")
+            .await
+            .expect("stop should succeed");
+
+        let stopped_err = runtime
+            .call_child_server_tool("trace-child", "echo_child", None)
+            .await
+            .expect_err("calling a stopped child server must error");
+        assert!(stopped_err.contains("not currently running"));
     }
 }

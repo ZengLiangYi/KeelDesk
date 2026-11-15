@@ -10,6 +10,7 @@ const BROWSER_PREVIEW_SNAPSHOT: KeelRuntimeSnapshot = {
   status: "running",
   endpoint_url: "http://127.0.0.1:19527/mcp",
   bind_addr: "127.0.0.1:19527",
+  bound_port: 19527,
   server_name: "keeldesk",
   server_version: "0.1.0",
   started_at_iso: new Date().toISOString(),
@@ -48,6 +49,7 @@ const BROWSER_PREVIEW_SNAPSHOT: KeelRuntimeSnapshot = {
   recent_calls: [],
   pending_approvals: [],
   session_allowlist: [],
+  active_sessions: [],
 };
 
 export function isTauriRuntime(): boolean {

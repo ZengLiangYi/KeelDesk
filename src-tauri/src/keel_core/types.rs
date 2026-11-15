@@ -65,10 +65,23 @@ pub struct ToolCallLogEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct McpSessionSummary {
+    pub session_id: String,
+    pub client_name: Option<String>,
+    pub client_version: Option<String>,
+    pub protocol_version: Option<String>,
+    pub user_agent: Option<String>,
+    pub connected_at_iso: String,
+    pub last_active_at_iso: String,
+    pub request_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct KeelRuntimeSnapshot {
     pub status: KeelServerStatus,
     pub endpoint_url: String,
     pub bind_addr: String,
+    pub bound_port: u16,
     pub server_name: String,
     pub server_version: String,
     pub started_at_iso: Option<String>,
@@ -78,6 +91,20 @@ pub struct KeelRuntimeSnapshot {
     pub recent_calls: Vec<ToolCallLogEntry>,
     pub pending_approvals: Vec<PendingToolApproval>,
     pub session_allowlist: Vec<SessionAllowlistEntry>,
+    pub active_sessions: Vec<McpSessionSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct KeelHealthCheckResult {
+    pub ok: bool,
+    pub status_code: u16,
+    pub latency_ms: u32,
+    pub endpoint_url: String,
+    pub healthz_url: String,
+    pub bound_port: u16,
+    pub active_session_count: u32,
+    pub total_calls: u32,
+    pub checked_at_iso: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, schemars::JsonSchema)]
