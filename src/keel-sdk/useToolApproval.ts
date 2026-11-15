@@ -8,7 +8,8 @@ import {
   type SessionAllowlistEntry,
   type ToolApprovalDecision,
 } from "@/bindings";
-import { isTauriRuntime } from "./useKeelRuntime";
+import { pushPreviewProtocolTrace } from "./previewTraceBus";
+import { isTauriRuntime } from "./useMcpServerState";
 
 export interface PreviewApprovalDrillOptions {
   port?: number | null;
@@ -16,10 +17,27 @@ export interface PreviewApprovalDrillOptions {
   reason?: string | null;
 }
 
+export interface UseToolApprovalResult {
+  pendingApprovals: PendingToolApproval[];
+  activeApproval: PendingToolApproval | null;
+  sessionAllowlist: SessionAllowlistEntry[];
+  isSubmitting: boolean;
+  error: string | null;
+  approveOnce: (requestId: string) => Promise<boolean>;
+  approveForSession: (requestId: string) => Promise<boolean>;
+  deny: (requestId: string) => Promise<boolean>;
+  clearSessionAllowlist: () => Promise<boolean>;
+  simulatePreviewApproval: (
+    options?: PreviewApprovalDrillOptions,
+  ) => Promise<KillPortProcessResult>;
+}
+
 interface PreviewPendingResolver {
   target: PendingToolApproval;
   port: number;
   processName: string;
+  startedMs: number;
+  reason: string;
   timeoutHandle: number;
   resolve: (result: KillPortProcessResult) => void;
   reject: (error: Error) => void;
@@ -37,10 +55,36 @@ function mergePendingApproval(
   return [...list, incoming];
 }
 
-export function useToolApproval(snapshot?: KeelRuntimeSnapshot | null) {
+function buildKillPortRequestValue(
+  jsonrpcId: string,
+  port: number,
+  reason: string,
+) {
+  return {
+    jsonrpc: "2.0",
+    id: jsonrpcId,
+    method: "tools/call",
+    params: {
+      name: "kill_port_process",
+      arguments: {
+        port,
+        dry_run: true,
+        reason,
+      },
+    },
+  };
+}
+
+export function useToolApproval(
+  externalSnapshot?: KeelRuntimeSnapshot | null,
+): UseToolApprovalResult {
+  const isExternallyControlled = externalSnapshot !== undefined;
+
+  const [internalSnapshot, setInternalSnapshot] =
+    useState<KeelRuntimeSnapshot | null>(null);
   const [pendingApprovals, setPendingApprovals] = useState<
     PendingToolApproval[]
-  >(() => snapshot?.pending_approvals ?? []);
+  >(() => externalSnapshot?.pending_approvals ?? []);
   const [previewAllowlist, setPreviewAllowlist] = useState<
     SessionAllowlistEntry[]
   >([]);
@@ -52,12 +96,59 @@ export function useToolApproval(snapshot?: KeelRuntimeSnapshot | null) {
     new Map(),
   );
 
+  // When called standalone without an external snapshot, subscribe to runtime snapshot updates.
   useEffect(() => {
-    if (!isTauriRuntime() || !snapshot) {
+    if (isExternallyControlled || !isTauriRuntime()) {
       return;
     }
-    setPendingApprovals(snapshot.pending_approvals);
-  }, [snapshot]);
+
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+
+    void commands
+      .getKeelRuntimeSnapshot()
+      .then((res) => {
+        if (!cancelled && res.status === "ok") {
+          setInternalSnapshot(res.data);
+          setPendingApprovals(res.data.pending_approvals);
+        }
+      })
+      .catch(() => {
+        // Standalone fallback error surfaced via subsequent action calls
+      });
+
+    void events.keelRuntimeUpdatedEvent
+      .listen((event) => {
+        if (!cancelled) {
+          setInternalSnapshot(event.payload);
+        }
+      })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [isExternallyControlled]);
+
+  const effectiveSnapshot = isExternallyControlled
+    ? externalSnapshot
+    : internalSnapshot;
+
+  useEffect(() => {
+    if (!isTauriRuntime() || !effectiveSnapshot) {
+      return;
+    }
+    setPendingApprovals(effectiveSnapshot.pending_approvals);
+  }, [effectiveSnapshot]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -146,21 +237,101 @@ export function useToolApproval(snapshot?: KeelRuntimeSnapshot | null) {
           }
 
           if (resolverEntry) {
+            const approvalWaitMs = Math.max(
+              1,
+              Date.now() - resolverEntry.startedMs,
+            );
+
             if (decision === "deny") {
-              resolverEntry.reject(
-                new Error(
-                  "User denied execution of 'kill_port_process' in KeelDesk approval gate.",
+              const denialReason =
+                "User denied execution of 'kill_port_process' in KeelDesk approval gate.";
+
+              pushPreviewProtocolTrace({
+                transport: "streamable_http",
+                direction: "inbound",
+                target: "keeldesk",
+                session_id: "preview-sess-drill",
+                caller_hint: resolverEntry.target.caller_hint ?? "loopback-drill",
+                jsonrpc_id: resolverEntry.target.request_id,
+                method: "tools/call",
+                tool_name: "kill_port_process",
+                safety_tier: "confirm_required",
+                approval_outcome: "denied",
+                status: "blocked",
+                status_code: 200,
+                error_message: denialReason,
+                latency: {
+                  total_ms: approvalWaitMs,
+                  approval_wait_ms: approvalWaitMs,
+                  execution_ms: 0,
+                },
+                request_value: buildKillPortRequestValue(
+                  resolverEntry.target.request_id,
+                  resolverEntry.port,
+                  resolverEntry.reason,
                 ),
-              );
+                response_value: {
+                  jsonrpc: "2.0",
+                  id: resolverEntry.target.request_id,
+                  error: {
+                    code: -32001,
+                    message: denialReason,
+                  },
+                },
+                linked_call_id: null,
+              });
+
+              resolverEntry.reject(new Error(denialReason));
             } else {
-              resolverEntry.resolve({
+              const executionMs = 3;
+              const resultPayload: KillPortProcessResult = {
                 port: resolverEntry.port,
                 dry_run: true,
                 target_pids: [4820],
                 terminated_pids: [],
                 process_names: [resolverEntry.processName],
                 message: `Dry-run check passed on TCP port ${resolverEntry.port} (${resolverEntry.processName}); no process was terminated.`,
+              };
+
+              pushPreviewProtocolTrace({
+                transport: "streamable_http",
+                direction: "inbound",
+                target: "keeldesk",
+                session_id: "preview-sess-drill",
+                caller_hint: resolverEntry.target.caller_hint ?? "loopback-drill",
+                jsonrpc_id: resolverEntry.target.request_id,
+                method: "tools/call",
+                tool_name: "kill_port_process",
+                safety_tier: "confirm_required",
+                approval_outcome:
+                  decision === "approve_for_session"
+                    ? "approved_for_session"
+                    : "approved_once",
+                status: "succeeded",
+                status_code: 200,
+                error_message: null,
+                latency: {
+                  total_ms: approvalWaitMs + executionMs,
+                  approval_wait_ms: approvalWaitMs,
+                  execution_ms: executionMs,
+                },
+                request_value: buildKillPortRequestValue(
+                  resolverEntry.target.request_id,
+                  resolverEntry.port,
+                  resolverEntry.reason,
+                ),
+                response_value: {
+                  jsonrpc: "2.0",
+                  id: resolverEntry.target.request_id,
+                  result: {
+                    isError: false,
+                    structuredContent: resultPayload,
+                  },
+                },
+                linked_call_id: null,
               });
+
+              resolverEntry.resolve(resultPayload);
             }
           }
 
@@ -220,6 +391,9 @@ export function useToolApproval(snapshot?: KeelRuntimeSnapshot | null) {
     try {
       const res = await commands.clearKeelSessionAllowlist();
       if (res.status === "ok") {
+        if (!isExternallyControlled) {
+          setInternalSnapshot(res.data);
+        }
         return true;
       }
       setError(res.error);
@@ -228,7 +402,7 @@ export function useToolApproval(snapshot?: KeelRuntimeSnapshot | null) {
       setError(err instanceof Error ? err.message : String(err));
       return false;
     }
-  }, []);
+  }, [isExternallyControlled]);
 
   const simulatePreviewApproval = useCallback(
     (
@@ -248,14 +422,51 @@ export function useToolApproval(snapshot?: KeelRuntimeSnapshot | null) {
           entry.session_scope === sessionScope && entry.tool_name === toolName,
       );
       if (isAllowlisted) {
-        return Promise.resolve({
+        const allowlistedResult: KillPortProcessResult = {
           port: targetPort,
           dry_run: true,
           target_pids: [4820],
           terminated_pids: [],
           process_names: [processName],
           message: `Session allowlisted dry-run passed on TCP port ${targetPort} (${processName}).`,
+        };
+
+        pushPreviewProtocolTrace({
+          transport: "streamable_http",
+          direction: "inbound",
+          target: "keeldesk",
+          session_id: "preview-sess-drill",
+          caller_hint: "loopback-drill",
+          jsonrpc_id: `preview-allowlisted-${previewSeqRef.current++}`,
+          method: "tools/call",
+          tool_name: toolName,
+          safety_tier: "confirm_required",
+          approval_outcome: "session_allowlisted",
+          status: "succeeded",
+          status_code: 200,
+          error_message: null,
+          latency: {
+            total_ms: 3,
+            approval_wait_ms: 0,
+            execution_ms: 3,
+          },
+          request_value: buildKillPortRequestValue(
+            `preview-allowlisted-${previewSeqRef.current - 1}`,
+            targetPort,
+            normalizedReason,
+          ),
+          response_value: {
+            jsonrpc: "2.0",
+            id: `preview-allowlisted-${previewSeqRef.current - 1}`,
+            result: {
+              isError: false,
+              structuredContent: allowlistedResult,
+            },
+          },
+          linked_call_id: null,
         });
+
+        return Promise.resolve(allowlistedResult);
       }
 
       const seq = previewSeqRef.current++;
@@ -294,17 +505,57 @@ export function useToolApproval(snapshot?: KeelRuntimeSnapshot | null) {
           setPendingApprovals((prev) =>
             prev.filter((item) => item.request_id !== requestId),
           );
-          reject(
-            new Error(
-              "Approval request timed out after 60s; tool execution blocked.",
-            ),
+          const timeoutMsg =
+            "Approval request timed out after 60s; tool execution blocked.";
+          const waitMs = Math.max(
+            PREVIEW_APPROVAL_TIMEOUT_SECS * 1000,
+            Date.now() - requestedAtMs,
           );
+
+          pushPreviewProtocolTrace({
+            transport: "streamable_http",
+            direction: "inbound",
+            target: "keeldesk",
+            session_id: "preview-sess-drill",
+            caller_hint: "loopback-drill",
+            jsonrpc_id: requestId,
+            method: "tools/call",
+            tool_name: toolName,
+            safety_tier: "confirm_required",
+            approval_outcome: "timed_out",
+            status: "blocked",
+            status_code: 200,
+            error_message: timeoutMsg,
+            latency: {
+              total_ms: waitMs,
+              approval_wait_ms: waitMs,
+              execution_ms: 0,
+            },
+            request_value: buildKillPortRequestValue(
+              requestId,
+              targetPort,
+              normalizedReason,
+            ),
+            response_value: {
+              jsonrpc: "2.0",
+              id: requestId,
+              error: {
+                code: -32002,
+                message: timeoutMsg,
+              },
+            },
+            linked_call_id: null,
+          });
+
+          reject(new Error(timeoutMsg));
         }, PREVIEW_APPROVAL_TIMEOUT_SECS * 1000);
 
         previewResolversRef.current.set(requestId, {
           target: pending,
           port: targetPort,
           processName,
+          startedMs: requestedAtMs,
+          reason: normalizedReason,
           timeoutHandle,
           resolve,
           reject,
@@ -317,7 +568,7 @@ export function useToolApproval(snapshot?: KeelRuntimeSnapshot | null) {
   const activeApproval: PendingToolApproval | null =
     pendingApprovals[0] ?? null;
   const sessionAllowlist: SessionAllowlistEntry[] = isTauriRuntime()
-    ? (snapshot?.session_allowlist ?? [])
+    ? (effectiveSnapshot?.session_allowlist ?? [])
     : previewAllowlist;
 
   return {
